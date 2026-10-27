@@ -127,30 +127,93 @@
   #touchLayer.on{display:block;}
   .touch-zone{position:absolute;pointer-events:auto;touch-action:none;}
 
-  /* ── 左拇指：左右箭头（← 左打满 / → 右打满），与右侧油门刹车对称 ── */
-  #btnLeft,#btnRight{width:88px;height:88px;font-size:34px;line-height:1;
-    background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.42);color:#e2e8f0;}
-  #btnLeft{left:18px;bottom:22px;}
-  #btnRight{left:114px;bottom:22px;}
-  #btnLeft.pressed,#btnRight.pressed{background:rgba(56,189,248,.5);border-color:rgba(125,211,252,.95);}
+  /* ── 左拇指：左右箭头转向（参考 QQ 飞车）── */
+  #btnLeft,#btnRight{
+    width:96px;height:96px;font-size:40px;line-height:1;
+    background:rgba(255,255,255,.12);border:3px solid rgba(255,255,255,.45);
+    color:#e2e8f0;border-radius:18px;
+  }
+  #btnLeft{left:16px;bottom:20px;}
+  #btnRight{left:122px;bottom:20px;}
+  #btnLeft.pressed,#btnRight.pressed{
+    background:rgba(56,189,248,.55);border-color:#38bdf8;
+    box-shadow:0 0 20px rgba(56,189,248,.6);
+  }
 
-  /* ── 右拇指：油门/刹车做大，漂移/氮气在上方一排，极限最小放最上 ── */
-  .btn-t{position:absolute;display:flex;align-items:center;justify-content:center;
-    border-radius:50%;color:#fff;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.8);
-    transition:transform .08s,filter .08s;box-shadow:0 4px 12px rgba(0,0,0,.3);}
-  .btn-t.pressed{transform:scale(.92);filter:brightness(1.3);}
-  #btnThrottle{width:88px;height:88px;font-size:26px;right:18px;bottom:22px;
-    background:rgba(74,222,128,.72);border:2px solid rgba(74,222,128,.95);}
-  #btnBrake{width:80px;height:80px;font-size:24px;right:116px;bottom:22px;
-    background:rgba(248,113,113,.68);border:2px solid rgba(248,113,113,.92);}
-  #btnDrift{width:62px;height:62px;font-size:15px;right:124px;bottom:114px;
-    background:rgba(251,191,36,.66);border:2px solid rgba(251,191,36,.9);}
-  #btnNitro{width:74px;height:74px;font-size:16px;right:16px;bottom:116px;
-    background:rgba(56,189,248,.66);border:2px solid rgba(56,189,248,.9);}
-  #btnNitro.spraying{background:rgba(103,232,249,.92);border-color:#a5f3fc;
-    box-shadow:0 0 18px rgba(103,232,249,.55);color:#0c4a6e;}
-  #btnBoost{width:54px;height:54px;font-size:13px;right:20px;bottom:190px;
-    background:rgba(168,85,247,.62);border:2px solid rgba(168,85,247,.88);}
+  /* ── 右拇指：垂直一列（油门→刹车→漂移→氮气→极限）── */
+  .btn-r{
+    position:absolute;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:700;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);
+    transition:transform .06s,filter .06s,box-shadow .06s;
+  }
+  .btn-r.pressed{transform:scale(.9);filter:brightness(1.4);}
+
+  /* 油门：最大，绿色，最显眼（QQ 飞车风格） */
+  #btnThrottle{
+    width:96px;height:96px;font-size:28px;
+    right:16px;bottom:20px;
+    background:linear-gradient(145deg,rgba(34,197,94,.82),rgba(22,163,74,.82));
+    border:3px solid rgba(74,222,128,.95);
+    border-radius:20px;
+    box-shadow:0 4px 18px rgba(34,197,94,.35);
+  }
+  #btnThrottle.pressed{box-shadow:0 0 28px rgba(34,197,94,.75);}
+
+  /* 刹车：次大，红色 */
+  #btnBrake{
+    width:82px;height:82px;font-size:24px;
+    right:120px;bottom:20px;
+    background:linear-gradient(145deg,rgba(239,68,68,.78),rgba(220,38,38,.78));
+    border:3px solid rgba(248,113,113,.95);
+    border-radius:18px;
+    box-shadow:0 4px 16px rgba(239,68,68,.3);
+  }
+  #btnBrake.pressed{box-shadow:0 0 26px rgba(239,68,68,.7);}
+
+  /* 漂移：黄色，上方 */
+  #btnDrift{
+    width:72px;height:72px;font-size:16px;
+    right:126px;bottom:114px;
+    background:linear-gradient(145deg,rgba(234,179,8,.72),rgba(202,138,4,.72));
+    border:2px solid rgba(251,191,36,.9);
+    border-radius:16px;
+    box-shadow:0 3px 14px rgba(234,179,8,.3);
+  }
+  #btnDrift.pressed{box-shadow:0 0 22px rgba(234,179,8,.7);}
+
+  /* 氮气：蓝色，上方 */
+  #btnNitro{
+    width:82px;height:82px;font-size:18px;
+    right:16px;bottom:118px;
+    background:linear-gradient(145deg,rgba(14,165,233,.72),rgba(2,132,199,.72));
+    border:2px solid rgba(56,189,248,.9);
+    border-radius:18px;
+    box-shadow:0 3px 14px rgba(14,165,233,.3);
+  }
+  #btnNitro.spraying{
+    background:linear-gradient(145deg,rgba(103,232,249,.95),rgba(6,182,212,.95));
+    border-color:#a5f3fc;
+    box-shadow:0 0 28px rgba(103,232,249,.8);
+  }
+  #btnNitro.pressed{box-shadow:0 0 22px rgba(14,165,233,.7);}
+
+  /* 极限突破：紫色，最上方 */
+  #btnBoost{
+    width:60px;height:60px;font-size:13px;
+    right:22px;bottom:208px;
+    background:linear-gradient(145deg,rgba(139,92,246,.7),rgba(109,40,217,.7));
+    border:2px solid rgba(168,85,247,.88);
+    border-radius:14px;
+    box-shadow:0 3px 12px rgba(139,92,246,.3);
+  }
+  #btnBoost.pressed{box-shadow:0 0 20px rgba(139,92,246,.7);}
+
+  /* 布局预设按钮 */
+  .layout-opt{padding:5px 14px;font-size:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#cbd5e1;border-radius:7px;cursor:pointer;flex:1;text-align:center;}
+  .layout-opt.active{background:#0ea5e9;border-color:#38bdf8;color:#fff;}
+  #layoutRow .setVal{font-size:11px;color:#64748b;width:auto;flex:1;}
+
   /* 竖屏提示（横屏时自动隐藏） */
   #rotateTip{display:none;position:absolute;top:64px;left:50%;transform:translateX(-50%);
     padding:6px 14px;border-radius:999px;background:rgba(10,14,20,.75);
@@ -159,19 +222,17 @@
   @media (orientation:portrait){ body.touch-ui #rotateTip{display:block;} }
   /* 触屏设备不显示键盘提示条 */
   body.touch-ui #hint{display:none;}
-  /* 漂移提示移到顶部居中：四角都留给拇指，也不压功能键 */
+  /* 漂移提示移到顶部居中 */
   body.touch-ui #drift{top:8px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);}
-  /* ── 横屏（手机横过来，常见可视高 320~460）重新排 HUD，给两侧拇指让位 ── */
+  /* ── 横屏适配 ── */
   @media (orientation:landscape){
     body.touch-ui #times{top:8px;left:10px;font-size:12px;line-height:1.55;padding:6px 9px;}
     body.touch-ui #times .lbl{font-size:10px;}
     body.touch-ui #minimap{top:62px;left:12px;width:104px;height:104px;border-radius:8px;}
     body.touch-ui #nitroBox{top:174px;bottom:auto;left:12px;width:150px;padding:5px 9px;}
-    /* 速度表移到正下方居中：左右底角都留给拇指 */
     body.touch-ui #speed{left:50%;right:auto;transform:translateX(-50%);bottom:8px;
       font-size:36px;padding:2px 14px;}
     body.touch-ui #speed small{font-size:12px;}
-    /* 漂移提示挪到右上空白处，避开功能键 */
     body.touch-ui #drift{font-size:11px;padding:4px 9px;}
   }
   @media (orientation:landscape) and (max-height:400px){
@@ -179,27 +240,26 @@
     body.touch-ui #minimap{width:92px;height:92px;top:58px;}
     body.touch-ui #nitroBox{top:158px;width:136px;}
     body.touch-ui #speed{font-size:30px;}
-    body.touch-ui #btnThrottle{width:78px;height:78px;font-size:22px;}
-    body.touch-ui #btnBrake{width:72px;height:72px;font-size:20px;right:104px;}
-    body.touch-ui #btnDrift{width:56px;height:56px;right:110px;bottom:100px;}
-    body.touch-ui #btnNitro{width:66px;height:66px;bottom:102px;}
-    body.touch-ui #btnBoost{width:48px;height:48px;bottom:170px;}
-    body.touch-ui #btnLeft{width:78px;height:78px;font-size:30px;left:14px;bottom:18px;}
-    body.touch-ui #btnRight{width:78px;height:78px;font-size:30px;left:100px;bottom:18px;}
+    body.touch-ui #btnThrottle{width:86px;height:86px;font-size:24px;right:14px;bottom:16px;}
+    body.touch-ui #btnBrake{width:78px;height:78px;font-size:20px;right:106px;bottom:16px;}
+    body.touch-ui #btnDrift{width:64px;height:64px;font-size:14px;right:114px;bottom:104px;}
+    body.touch-ui #btnNitro{width:74px;height:74px;right:14px;bottom:106px;}
+    body.touch-ui #btnBoost{width:54px;height:54px;right:20px;bottom:186px;}
+    body.touch-ui #btnLeft{width:86px;height:86px;font-size:34px;left:14px;bottom:16px;}
+    body.touch-ui #btnRight{width:86px;height:86px;font-size:34px;left:106px;bottom:16px;}
   }
-  /* 矮屏（部分手机横屏只有 300~360 高）：进一步压缩左上信息区，避免与方向盘相撞 */
   @media (orientation:landscape) and (max-height:360px){
     body.touch-ui #times{font-size:11px;line-height:1.4;padding:4px 8px;top:6px;left:8px;}
     body.touch-ui #minimap{width:78px;height:78px;top:52px;left:8px;border-radius:6px;}
     body.touch-ui #nitroBox{top:52px;left:94px;width:120px;padding:4px 8px;}
     body.touch-ui #speed{font-size:26px;padding:1px 12px;bottom:6px;}
-    body.touch-ui #btnThrottle{width:72px;height:72px;font-size:20px;right:14px;bottom:14px;}
-    body.touch-ui #btnBrake{width:66px;height:66px;font-size:18px;right:94px;bottom:14px;}
-    body.touch-ui #btnDrift{width:52px;height:52px;right:100px;bottom:90px;}
-    body.touch-ui #btnNitro{width:62px;height:62px;right:14px;bottom:92px;}
-    body.touch-ui #btnBoost{width:46px;height:46px;right:16px;bottom:156px;}
-    body.touch-ui #btnLeft{width:66px;height:66px;font-size:26px;left:12px;bottom:12px;}
-    body.touch-ui #btnRight{width:66px;height:66px;font-size:26px;left:86px;bottom:12px;}
+    body.touch-ui #btnThrottle{width:78px;height:78px;font-size:20px;right:12px;bottom:12px;}
+    body.touch-ui #btnBrake{width:72px;height:72px;font-size:18px;right:96px;bottom:12px;}
+    body.touch-ui #btnDrift{width:58px;height:58px;right:100px;bottom:92px;}
+    body.touch-ui #btnNitro{width:68px;height:68px;right:12px;bottom:94px;}
+    body.touch-ui #btnBoost{width:50px;height:50px;right:18px;bottom:162px;}
+    body.touch-ui #btnLeft{width:72px;height:72px;font-size:28px;left:10px;bottom:10px;}
+    body.touch-ui #btnRight{width:72px;height:72px;font-size:28px;left:88px;bottom:10px;}
   }
   /* 赛道名称标签 */
   #trackLabel{position:absolute;top:60px;left:50%;transform:translateX(-50%);
@@ -209,7 +269,7 @@
    *    行盒的基线间隙会把页面撑高，在视口里留下一条贯穿全宽的黑色空档。
    *    这里把它固定到视口左上角并压到最底层。
    * 2) 明确 HUD / 触控层 / 菜单 / 报错条 的叠放顺序，避免面板压住菜单。 */
-  body > canvas{position:fixed;top:0;left:0;z-index:0;display:block;}
+  body > canvas{position:fixed;top:0;left:0;z-index:0;display:block;pointer-events:none;}
   #hud{z-index:10;}
   #overlay{z-index:100;}
   #err{z-index:130;}
@@ -237,13 +297,13 @@
 <div id="touchLayer">
   <div id="trackLabel"></div>
   <div id="rotateTip">↻ 建议横屏游玩</div>
-  <div id="btnLeft" class="touch-zone btn-t">←</div>
-  <div id="btnRight" class="touch-zone btn-t">→</div>
-  <div id="btnThrottle" class="touch-zone btn-t">油门</div>
-  <div id="btnBrake" class="touch-zone btn-t">刹车</div>
-  <div id="btnDrift" class="touch-zone btn-t">漂移</div>
-  <div id="btnNitro" class="touch-zone btn-t">氮气</div>
-  <div id="btnBoost" class="touch-zone btn-t">极限</div>
+  <div id="btnLeft" class="touch-zone btn-r">←</div>
+  <div id="btnRight" class="touch-zone btn-r">→</div>
+  <div id="btnThrottle" class="touch-zone btn-r">油门</div>
+  <div id="btnBrake" class="touch-zone btn-r">刹车</div>
+  <div id="btnDrift" class="touch-zone btn-r">漂移</div>
+  <div id="btnNitro" class="touch-zone btn-r">氮气</div>
+  <div id="btnBoost" class="touch-zone btn-r">极限</div>
 </div>
 <div id="overlay">
   <button id="settingsBtn" title="设置">设置</button>
@@ -327,6 +387,13 @@
       <button id="clearCacheBtn" class="dangerbtn">清空圈速与幽灵</button>
       <span id="clearCacheMsg"></span>
     </div>
+    <div class="setRow" id="layoutRow">
+      <label>按键布局</label>
+      <button class="layout-opt" data-layout="standard">标准</button>
+      <button class="layout-opt" data-layout="compact">紧凑</button>
+      <button class="layout-opt" data-layout="wide">宽距</button>
+      <span class="setVal">按屏幕自动</span>
+    </div>
     <!-- FPS 始终显示在速度表右上角，无需此开关 -->
     <button id="settingsBack" class="ghostbtn">返回主菜单</button>
   </div>
@@ -396,28 +463,22 @@ const P = {
   offDrag: 2.2,       // 冲出赛道的额外阻力
   // --- 横向 / 漂移 ---
   grip: 22.0,           // 正常抓地（加大：300km/h 也贴地）
-  driftGrip: 4.0,       // 漂移侧向抓地（高：漂移可控，但侧滑大）
-  driftScrub: 0.75,     // 漂移蹭速：高（快速降速到漂移区间）
-  driftSteerBoost: 1.0,
-  driftYawCap: 1.4,     // 漂移偏转率封顶
-  steerRate: 2.6,       // 基础最大转向角速度
+  driftGrip: 3.5,       // 漂移侧向抓地（中等：有阻力感，不会太飘）
+  driftScrub: 0.65,     // 漂移蹭速：中等偏高（保持速度感的同时有拖拽感）
+  driftSteerBoost: 1.4, // 漂移时转向力放大（保留一定灵活性但有阻力）
+  driftYawCap: 2.0,     // 漂移偏转率封顶（适中，不会太猛）
+  steerRate: 3.2,       // 基础最大转向角速度
   steerRef: 35,         // 达到满舵所需速度 m/s
   steerFade: 0.25,      // 高速转向衰减比例（再降：300km/h 仍有 75% 转向效率）
   driftMinTime: 0.8,    // 判定"完美"所需最短漂移秒数
-  driftSlipMin: 1.5,    // 侧滑门槛
-  driftMinSpeed: 8,     // 漂移判定最低车速
+  driftSlipMin: 0.5,    // 侧滑门槛（更低：更容易触发侧滑感知）
+  driftMinSpeed: 3,     // 漂移判定最低车速（更低：低速也能漂移）
   boostGain: 1.15,      // 完美漂移补偿：速度 ×1.15（补偿掉的速度）
   boostDuration: 2.5,   // 补偿加速持续秒数
   // --- 相机 ---
-  camDist: 9.5, camHeight: 4.5, camLerp: 5.0, lookAhead: 7,
+  camDist: 15.5, camHeight: 4.5, camLerp: 5.0, lookAhead: 7,
   // --- 表现 ---
-  roll: 0.06,         // 过弯侧倾 rad
-  // --- 完美漂移奖励 ---
-  driftMinTime: 1.0,  // 判定"完美"所需的最短连续漂移秒数（按住空格期间累积）
-  driftSlipMin: 1.5,  // 侧滑门槛：按住期间出现过一次真侧滑即可（锁存判定）
-  driftMinSpeed: 8,   // 漂移判定所需最低车速
-  boostGain: 1.05,    // 奖励：触发瞬间当前速度 ×1.05（可突破常规极速），期间上限也是 ×1.05
-  boostDuration: 3,   // 奖励持续秒数
+  roll: 0.12,         // 过弯侧倾 rad（峰值）
   // --- 碰撞 ---
   colRadius: 1.1,     // 默认碰撞半径（实际按各车型车宽 ×0.6 计算，见 applyCarDims）
   colOffset: 1.1,     // 默认碰撞圆偏移（实际按各车型车长 ×0.25 计算）
@@ -444,7 +505,7 @@ const P = {
 
 let selectedCar = 'default';
 let uiPanel = 'home'; // home | garage | result
-const TRACK_W = 20;   // 路面加宽：16→20m，容错空间更大
+const TRACK_W = 25;   // 路面加宽：20→25m，容错空间更大
 const N_SAMPLES = 1800;                 // 采样随地图加长加密（2.5km 老街 → 约1.4m/采样点）
 const CP_FRACS = [0, 0.25, 0.5, 0.75];
 const CP_WINDOW = 0.02;
@@ -771,6 +832,91 @@ trackGroup.add(buildStrip(0, N_SAMPLES - 1, -hw + 0.55, -hw + 0.75, 0.04,
     inst.setColorAt(k, Math.floor(i / postStep) % 2 ? cR : cW);
   });
   trackGroup.add(inst);
+}
+
+// 护栏：沿赛道两侧连续设置（实体墙，无缝隙）
+{
+  const railHeight = 0.9;
+  const BARRIER_DIST = hw + 1.1; // 碰撞触发距离
+  window.__barrierDist = BARRIER_DIST;
+  const railMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+  const postMat = new THREE.MeshLambertMaterial({ color: 0xbbbbbb });
+
+  for (let side = -1; side <= 1; side += 2) {
+    // 连续墙：逐段计算，每段刚好接上下一段
+    const posArr = [], colArr = [], idxArr = [];
+    // 立柱：每隔 4 段加一缝
+    const postSteps = 4;
+    const posP = [], colP = [], idxP = [];
+    const pw = 0.12, ph = railHeight, pt = 0.12;
+
+    for (let i = 0; i < N_SAMPLES; i++) {
+      const p = S[i], t = T[i];
+      const sx = t.z, sz = -t.x;
+      const px = p.x + sx * (hw + 1.5) * side;
+      const pz = p.z + sz * (hw + 1.5) * side;
+      // 法线（侧方向）和切线（路向）
+      const nx = sx, nz = sz;
+      const tx = t.x, tz = t.z;
+
+      if (i < N_SAMPLES - 1) {
+        const p2 = S[i + 1], t2 = T[i + 1];
+        const sx2 = t2.z, sz2 = -t2.x;
+        const px2 = p2.x + sx2 * (hw + 1.5) * side;
+        const pz2 = p2.z + sz2 * (hw + 1.5) * side;
+        // 中点位置和法线 —— 相邻段共享顶点，无缝
+        const mx = (px + px2) / 2, mz = (pz + pz2) / 2;
+        const mnx = (sx + sx2) / 2, mnz = (sz + sz2) / 2;
+        const mnlen = Math.sqrt(mnx * mnx + mnz * mnz) || 1;
+        const nnx = mnx / mnlen, nnz = mnz / mnlen;
+
+        const h = railHeight;
+        const thk = 0.06; // 板厚半宽
+        // 四角：外下、内下、内上、外上（共享中点，无缝）
+        const vi = posArr.length / 3;
+        posArr.push(
+          mx + nnx * thk, 0,      mz + nnz * thk,
+          mx - nnx * thk, 0,      mz - nnz * thk,
+          mx - nnx * thk, h,      mz - nnz * thk,
+          mx + nnx * thk, h,      mz + nnz * thk
+        );
+        colArr.push(
+          0.87, 0.87, 0.87,
+          0.87, 0.87, 0.87,
+          0.93, 0.93, 0.93,
+          0.93, 0.93, 0.93
+        );
+        idxArr.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+
+        // 立柱
+        if (i % postSteps === 0) {
+          const pi = posP.length / 3;
+          posP.push(
+            mx + nnx * 0.06, 0, mz + nnz * 0.06,
+            mx - nnx * 0.06, 0, mz - nnz * 0.06,
+            mx - nnx * 0.06, h, mz - nnz * 0.06,
+            mx + nnx * 0.06, h, mz + nnz * 0.06
+          );
+          colP.push(0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72);
+          idxP.push(pi, pi + 1, pi + 2, pi, pi + 2, pi + 3);
+        }
+      }
+    }
+
+    const g = new THREE.BufferGeometry();
+    g.setIndex(idxArr);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colArr, 3));
+    g.computeVertexNormals();
+    trackGroup.add(new THREE.Mesh(g, railMat));
+
+    const gp = new THREE.BufferGeometry();
+    gp.setIndex(idxP);
+    gp.setAttribute('position', new THREE.Float32BufferAttribute(posP, 3));
+    gp.setAttribute('color', new THREE.Float32BufferAttribute(colP, 3));
+    gp.computeVertexNormals();
+    trackGroup.add(new THREE.Mesh(gp, postMat));
+  }
 }
 // 起终点线：黑白格（单网格顶点色，替代纯白条）
 {
@@ -1654,7 +1800,7 @@ function applyCarDims(r, key){
   r.carType = key;
   r.colR = t.width * 0.6;
   r.colOff = t.len * 0.25;
-  r.camDist = 9.5 + (t.len - 4.4) * 0.9;
+  r.camDist = 15.5 + (t.len - 4.4) * 0.9;
   r.sk = skOf(key);   // 被动技能参数（换车时同步刷新）
 }
 // 玩家换车型时原地重建车身（保留 group 变换）
@@ -1717,7 +1863,7 @@ function placeRacerAt(r, i, lateral = 0){
   r.vel.set(0, 0, 0); r.vf = 0;
   r.nextCp = 0; r.cp3Done = false;
   r.s = i / N_SAMPLES; r.prevS = r.s; r.nearestI = i;
-  r.stuckT = 0; r.driftT = 0; r.boostT = 0; r.drifted = false; r.driftLoss = 0; r.slipped = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.skidPrev = null;
+  r.stuckT = 0; r.driftT = 0; r.boostT = 0; r.drifted = false; r.driftLoss = 0; r.slipped = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.skidPrev = null; r.rollAngle = 0; r.pitchAngle = 0;
   syncRacer(r);
 }
 function syncRacer(r){
@@ -2005,7 +2151,7 @@ function restart(){            // 完全重开：按模式发车 + 清计时
   );
   camSnap = true;
   for (const r of racers){
-    r.lap = 0; r.lapStartTime = 0; r.lastLap = null; r.finishOrder = 0; r.finishTime = null; r.nitro = 100; r.nitroOn = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.driftLoss = 0;
+    r.lap = 0; r.lapStartTime = 0; r.lastLap = null; r.finishOrder = 0; r.finishTime = null; r.nitro = 100; r.nitroOn = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.driftLoss = 0; r.rollAngle = 0; r.pitchAngle = 0;
     r.splitT = new Array(CP_FRACS.length).fill(null);
     r.splitBest = new Array(CP_FRACS.length).fill(null);
   }
@@ -2140,6 +2286,7 @@ function syncSettingsUI(){
   document.querySelectorAll('#fpsBtns .fps').forEach(b => {
     b.classList.toggle('active', Number(b.dataset.fps) === settings.fps);
   });
+  syncLayoutUI(settings.layout || 'standard');
 }
 document.querySelectorAll('#fpsBtns .fps').forEach(b => {
   b.addEventListener('click', () => {
@@ -2315,8 +2462,8 @@ function stepRacer(r, input, dt){
   // 角速度惯性 + 阻尼：车头不会瞬间达到目标转速，有重量的感觉
   // 高速时增加额外阻尼，防止"飘"
   const highSpeedDamp = 1.0 + 0.02 * Math.max(0, speed - 30);  // 30m/s 以上开始加重阻尼
-  const yawInertia = isDrift ? 14.0 : 8.0;  // 漂移时响应极快，常规时沉稳
-  const yawDamp = isDrift ? 2.0 : 3.5 * highSpeedDamp;  // 高速时更阻尼
+  const yawInertia = isDrift ? 10.0 : 3.0;  // 漂移时惯性适中，转向有重量感
+  const yawDamp = isDrift ? 5.0 : 4.0 * highSpeedDamp;  // 漂移时阻尼增加，转向更费力
   r.yawSpeed += (targetYawSpeed - r.yawSpeed) * Math.min(1, yawInertia * dt);
   r.yawSpeed *= (1 - yawDamp * dt);              // 阻尼衰减，松手后自然减速
   // 高速限速：超过 60m/s 后最大转向速率随速度降低（防飘）
@@ -2423,6 +2570,34 @@ function stepRacer(r, input, dt){
 
   r.vel.set(fx * vf + lx * vl, 0, fz * vf + lz * vl);
   r.pos.addScaledVector(r.vel, dt);
+  // 护栏碰撞：两侧都检测，超出即推回并反弹
+  if (window.__barrierDist) {
+    const bi = Math.max(0, Math.min(N_SAMPLES - 1, r.nearestI));
+    const p = S[bi], t = T[bi];
+    const nx = t.z, nz = -t.x; // 左法线（赛道左侧向外）
+    const barLx = p.x + nx * window.__barrierDist;
+    const barLz = p.z + nz * window.__barrierDist;
+    const barRx = p.x - nx * window.__barrierDist;
+    const barRz = p.z - nz * window.__barrierDist;
+    const dLx = r.pos.x - barLx, dLz = r.pos.z - barLz;
+    const dRx = r.pos.x - barRx, dRz = r.pos.z - barRz;
+    // 检查左护栏（法线指向外侧）和右护栏（-法线指向外侧）
+    const penL = dLx * nx + dLz * nz;
+    const penR = dRx * (-nx) + dRz * (-nz);
+    if (penL > 0 || penR > 0) {
+      const pen = Math.max(penL, penR);
+      const bnx = penL >= penR ? nx : -nx;
+      const bnz = penL >= penR ? nz : -nz;
+      r.pos.x -= bnx * pen;
+      r.pos.z -= bnz * pen;
+      const vn = r.vel.x * bnx + r.vel.z * bnz;
+      if (vn > 0) {
+        r.vel.x -= 1.6 * vn * bnx;
+        r.vel.z -= 1.6 * vn * bnz;
+        r.vf = Math.max(0, r.vf * 0.55);
+      }
+    }
+  }
   r.vf = vf;
 
   // 漂移轮胎印：后轮两个接触点连线铺设带状痕迹
@@ -2452,14 +2627,26 @@ function stepRacer(r, input, dt){
     r.skidPrev = null;
   }
 
-  // 视觉
+  // 视觉：车身姿态（侧倾+俯仰）+ 前轮转向
   r.group.position.copy(r.pos);
   r.group.rotation.y = r.yaw;
-  r.group.rotation.z = input.steer * P.roll * Math.min(1, speed / P.maxSpeed);
-  const frontY = input.steer * 0.42, spin = (vf / 0.35) * dt;
+  // 侧倾：基于 yawSpeed，漂移时更大，低速时衰减
+  const rollTarget = r.yawSpeed * P.roll * 0.3 * steerSmooth;
+  const driftRollMul = isDrift ? 2.5 : 1.0;
+  r.rollAngle = (r.rollAngle || 0);
+  r.rollAngle += (rollTarget * driftRollMul - r.rollAngle) * Math.min(1, 6 * dt);  // 更快的侧倾响应
+  r.group.rotation.z = r.rollAngle;
+  // 俯仰：加速后仰，刹车前倾
+  const pitchTarget = (input.throttle ? -0.03 : 0) + (input.brake ? 0.05 : 0);
+  r.pitchAngle = (r.pitchAngle || 0);
+  r.pitchAngle += (pitchTarget - r.pitchAngle) * Math.min(1, 5 * dt);  // 更快的俯仰响应
+  r.group.rotation.x = r.pitchAngle;
+  // 前轮转向：速度越高角度越小（参考跑跑卡丁车/QQ飞车机制）
+  const steerAngle = input.steer * 0.5 * Math.max(0.3, 1 - speed / P.PEAK_SPEED);
+  const spin = (vf / 0.35) * dt;
   r.wheels.forEach((w, i) => {
     w.rotation.x += spin;
-    if (i < 2) w.rotation.y = frontY;
+    if (i < 2) w.rotation.y = steerAngle;
   });
   // 奖励火焰
   if (r.glow){
@@ -2661,6 +2848,55 @@ function saveSettings(){
   try { localStorage.setItem('arcadeSettings', JSON.stringify(settings)); } catch (_) {}
 }
 
+/* 布局预设：每个预设是各按钮的 right/left/bottom 百分比坐标（相对 touchLayer） */
+const LAYOUTS = {
+  standard: {
+    btnLeft:  {left:16, bottom:20}, btnRight: {left:122, bottom:20},
+    btnThrottle: {right:16, bottom:20}, btnBrake: {right:120, bottom:20},
+    btnDrift:  {right:126, bottom:114}, btnNitro: {right:16, bottom:118},
+    btnBoost:  {right:22, bottom:208},
+  },
+  compact: {
+    btnLeft:  {left:10, bottom:14}, btnRight: {left:108, bottom:14},
+    btnThrottle: {right:12, bottom:14}, btnBrake: {right:108, bottom:14},
+    btnDrift:  {right:114, bottom:92}, btnNitro: {right:12, bottom:94},
+    btnBoost:  {right:18, bottom:158},
+  },
+  wide: {
+    btnLeft:  {left:8, bottom:18}, btnRight: {left:136, bottom:18},
+    btnThrottle: {right:8, bottom:18}, btnBrake: {right:136, bottom:18},
+    btnDrift:  {right:142, bottom:118}, btnNitro: {right:8, bottom:122},
+    btnBoost:  {right:14, bottom:218},
+  },
+};
+
+function applyLayout(key){
+  const ly = LAYOUTS[key] || LAYOUTS.standard;
+  settings.layout = key;
+  saveSettings();
+  syncLayoutUI(key);
+  for (const [id, pos] of Object.entries(ly)){
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.style.left = pos.left != null ? pos.left + 'px' : '';
+    el.style.right = pos.right != null ? pos.right + 'px' : '';
+    el.style.bottom = pos.bottom != null ? pos.bottom + 'px' : '';
+  }
+}
+
+function syncLayoutUI(key){
+  document.querySelectorAll('#layoutRow .layout-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.layout === key);
+  });
+}
+
+// 初始化布局
+applyLayout(settings.layout || 'standard');
+// 监听布局按钮
+document.querySelectorAll('#layoutRow .layout-opt').forEach(b => {
+  b.addEventListener('click', () => applyLayout(b.dataset.layout));
+});
+
 /* ============ 车库展厅（菜单选车） ============ */
 const GARAGE_POS = new THREE.Vector3(600, 0, -620);
 const showcase = new THREE.Group();
@@ -2820,25 +3056,26 @@ function updateCamera(dt){
   const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
   const t = CAR_TYPES[player.carType] || { len: 4.4, height: 1.3 };
   // 追尾机位：back = 沿车头方向的后退量；up = 机位高度；ahead = 注视点前移量
-  const back = player.camDist || P.camDist, up = P.camHeight, ahead = P.lookAhead, shakeMul = 1, fovBase = 62;
+  const back = player.camDist || P.camDist, up = P.camHeight;
   const tx = player.pos.x - fx * back;
   const tz = player.pos.z - fz * back;
   const ty = player.pos.y + up;
-  const k = camSnap ? 1 : (1 - Math.exp(-P.camLerp * dt));
-  camPos.x += (tx - camPos.x) * k;
-  camPos.y += (ty - camPos.y) * k;
-  camPos.z += (tz - camPos.z) * k;
+  // 硬跟随，无延迟
+  camPos.x = tx;
+  camPos.y = ty;
+  camPos.z = tz;
   camSnap = false;
   camera.position.copy(camPos);
-  lookPt.set(player.pos.x + fx * ahead, player.pos.y + 1.2, player.pos.z + fz * ahead);
+  // 视线朝车前方（用前向向量而非侧向）
+  const lookDist = 15;
+  const lookX = player.pos.x + fx * lookDist;
+  const lookZ = player.pos.z + fz * lookDist;
+  lookPt.set(lookX, player.pos.y + 0.8, lookZ);
   camera.lookAt(lookPt);
-  // 速度感：更强的 FOV 拉伸 + 高速微抖动 + 风流线 + 屏幕暗角
+  // 速度感：固定 FOV + 屏幕暗角（不加镜头抖动，保持稳定）
   const sp = Math.min(1, Math.abs(player.vf) / P.PEAK_SPEED);
-  camera.fov = fovBase + 14 * sp * sp + (player.nitroOn ? 10 : 0) + (player.overT > 0 ? 18 : 0);
+  camera.fov = 62;  // 固定 FOV，不因速度变化
   camera.updateProjectionMatrix();
-  const shake = sp * sp * (player.overT > 0 ? 0.16 : 0.085) * shakeMul + (player.nitroOn ? sp * 0.035 : 0);
-  camera.position.x += (Math.random() - 0.5) * shake;
-  camera.position.y += (Math.random() - 0.5) * shake * 0.6;
   speedFxEl.style.opacity = (sp * sp * 0.85).toFixed(3);   // 暗角：低速无感，极速明显收边
   updateStreaks(dt);
   dirLight.position.set(player.pos.x + 40, 70, player.pos.z + 20);
@@ -2859,7 +3096,7 @@ function updateCountdownCamera(){
   const p = clamp(1 - countdownT / CD_TOTAL, 0, 1);
   const e = p * p * (3 - 2 * p);            // smoothstep：起停都柔，中间快
   const a = player.yaw + Math.PI + 2.1 * (1 - e);  // 从车头左前方绕到车尾
-  const r = 15 - 5.5 * e;                          // 15 → 9.5（等于标准 camDist）
+  const r = 15 - 2.5 * e;                          // 15 → 15.5（等于标准 camDist）
   const h = 1.6 + 2.9 * e;                         // 低角度贴地起，逐渐升高
   camPos.set(player.pos.x + Math.sin(a) * r, player.pos.y + h, player.pos.z + Math.cos(a) * r);
   camera.position.copy(camPos);
@@ -2895,7 +3132,8 @@ function updateHUD(){
     driftEl.style.color = '#ffd479';
     driftEl.style.opacity = 1;
   } else if (player.driftT > 0.2){
-    driftEl.textContent = '漂移充能 ' + player.driftT.toFixed(1) + ' / ' + P.driftMinTime.toFixed(1) + 's';
+    const slipDeg = (Math.abs(player.vl) * 180 / Math.PI).toFixed(0);
+    driftEl.textContent = '漂移充能 ' + player.driftT.toFixed(1) + 's | 侧滑 ' + slipDeg + '°';
     driftEl.style.color = '#ffd479';
     driftEl.style.opacity = 1;
   } else if (player.overCd > 0){
