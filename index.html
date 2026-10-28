@@ -309,6 +309,29 @@
     body.touch-ui #btnLeft{width:72px;height:72px;font-size:28px;left:10px;bottom:10px;}
     body.touch-ui #btnRight{width:72px;height:72px;font-size:28px;left:88px;bottom:10px;}
   }
+  /* ── 竖屏适配（触屏）──
+   * 竖屏宽度只有 360~430px，按桌面基础样式排布时：
+   * 右转向键（left:122 宽 96）会与刹车（right:120 宽 82）在同一行直接重叠；
+   * 速度表（右下）压住油门/刹车，氮气条（左下）压住转向箭头。
+   * 这里整体缩小按钮错开排布，HUD 挪到顶部两侧。 */
+  @media (orientation:portrait){
+    body.touch-ui #btnLeft{width:80px;height:80px;font-size:30px;left:12px;bottom:16px;}
+    body.touch-ui #btnRight{width:80px;height:80px;font-size:30px;left:100px;bottom:16px;}
+    body.touch-ui #btnThrottle{width:80px;height:80px;font-size:24px;right:12px;bottom:16px;}
+    body.touch-ui #btnBrake{width:70px;height:70px;font-size:20px;right:96px;bottom:16px;}
+    body.touch-ui #btnNitro{width:70px;height:70px;font-size:16px;right:12px;bottom:104px;}
+    body.touch-ui #btnDrift{width:62px;height:62px;font-size:13px;right:104px;bottom:104px;}
+    body.touch-ui #btnBoost{width:52px;height:52px;font-size:12px;right:20px;bottom:182px;}
+    body.touch-ui #times{top:8px;left:10px;font-size:12px;line-height:1.55;padding:6px 9px;}
+    body.touch-ui #nitroBox{top:60px;bottom:auto;left:12px;width:150px;padding:5px 9px;}
+    body.touch-ui #minimap{top:112px;left:12px;width:92px;height:92px;border-radius:8px;}
+    body.touch-ui #speed{left:50%;right:auto;bottom:auto;transform:translateX(-50%);
+      top:8px;font-size:28px;padding:2px 12px;}
+    body.touch-ui #speed small{font-size:11px;}
+    body.touch-ui #drift{top:52px;font-size:11px;padding:4px 9px;}
+    body.touch-ui #trackLabel{top:100px;}
+    body.touch-ui #hudExit{top:8px;right:12px;}
+  }
   /* 赛道名称标签 */
   #trackLabel{position:absolute;top:60px;left:50%;transform:translateX(-50%);
     font-size:12px;color:rgba(255,255,255,.4);letter-spacing:2px;pointer-events:none;}
@@ -2525,6 +2548,7 @@ const UPDATE_LOG = [
     '触控输入统一重置：转向 / 油门 / 刹车 / 漂移 / 氮气 / 极限全部强制释放',
     '幽灵存档严格校验：损坏或异常数据自动安全丢弃，不再影响游戏；录像增加单圈 6 分钟上限防存储膨胀',
     '车库选车界面自适应窄屏，手机上自动变 2 列，不再溢出',
+    '竖屏比赛布局适配：修复转向键与刹车重叠、速度表/氮气条压住按钮的问题',
     '极端报错时自动弹出暂停菜单，不再静默卡死画面',
     '移动端性能专项：赛道就近点搜索（原为每帧全表扫描），主线程大幅减负',
     '渲染分辨率自适应：帧率不足自动降精度保流畅，满帧自动回升',
