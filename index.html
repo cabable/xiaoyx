@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<!-- CDN 预连接：Three.js 约 600KB 是首屏加载大头，提前完成 DNS/TLS 可省数百毫秒 -->
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="dns-prefetch" href="https://unpkg.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <title>街机赛车</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a0e14;font-family:"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;}
@@ -248,20 +255,17 @@
     white-space:nowrap;pointer-events:auto;z-index:60;cursor:pointer;}
   #touchLayer.editing #layoutEditBar{display:block;}
 
-  /* 竖屏提示（横屏时自动隐藏）；强制横屏：竖屏时全屏遮罩挡住游戏 */
-  #rotateTip{display:none;position:absolute;top:64px;left:50%;transform:translateX(-50%);
-    padding:6px 14px;border-radius:999px;background:rgba(10,14,20,.75);
-    border:1px solid rgba(56,189,248,.35);color:#7dd3fc;font-size:12px;letter-spacing:1px;
-    white-space:nowrap;pointer-events:none;}
-  @media (orientation:portrait){
-    body.touch-ui #rotateTip{
-      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
-      position:fixed;inset:0;top:0;left:0;right:0;bottom:0;transform:none;
-      background:rgba(7,10,16,.97);z-index:90;pointer-events:auto;
-      font-size:20px;padding:24px;text-align:center;}
-    body.touch-ui #rotateTip .rt-icon{font-size:64px;animation:rtspin 1.6s ease-in-out infinite;}
-    @keyframes rtspin{0%,100%{transform:rotate(0)}50%{transform:rotate(90deg)}}
-  }
+  /* 竖屏提示：角标 + 点击进入全屏 */
+  #rotateHint{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    padding:12px 24px;border-radius:16px;background:rgba(10,14,20,.92);
+    border:1px solid rgba(56,189,248,.5);color:#7dd3fc;font-size:14px;
+    white-space:nowrap;pointer-events:auto;z-index:80;text-align:center;cursor:pointer;
+    user-select:none;-webkit-tap-highlight-color:transparent;
+    box-shadow:0 0 20px rgba(56,189,248,.3);}
+  #rotateHint:active{background:rgba(56,189,248,.3);}
+  #rotateHint .rt-icon{font-size:28px;display:block;margin-bottom:4px;}
+  #rotateHint .rt-sub{font-size:11px;color:#94a3b8;display:block;margin-top:2px;}
+  body.touch-ui.portrait #rotateHint{display:flex;flex-direction:column;align-items:center;}
   /* 触屏设备不显示键盘提示条 */
   body.touch-ui #hint{display:none;}
   /* 漂移提示移到顶部居中 */
@@ -338,7 +342,10 @@
 <!-- 手机触控层 -->
 <div id="touchLayer">
   <div id="trackLabel"></div>
-  <div id="rotateTip"><span class="rt-icon">↻</span>请横屏游玩<br><small style="font-size:13px;color:#94a3b8">锁定竖屏旋转手机即可进入</small></div>
+  <div id="rotateHint">
+    <span class="rt-icon">↻</span>请旋转手机至横屏
+    <span class="rt-sub">点击尝试进入全屏</span>
+  </div>
   <div id="layoutEditBar">✓ 完成（保存布局）</div>
   <div id="btnLeft" class="touch-zone btn-r">←</div>
   <div id="btnRight" class="touch-zone btn-r">→</div>
@@ -482,7 +489,13 @@ window.addEventListener('unhandledrejection', e => showError(String(e.reason)));
 /* 多 CDN 动态加载 Three.js（自动降级，避免单一 CDN 被墙导致整个游戏无法启动） */
 let THREE = null;
 const menuBtns = Array.from(document.querySelectorAll('#overlay button.mode, #overlay button.car, #overlay button.ghostbtn') || []);
-console.log('[街机赛车] 版本 v20261028');
+/* 设备判定（渲染器初始化前就需要）：
+ * IS_TOUCH 只管"是否启用触控操作"；IS_MOBILE 管渲染画质，用 UA 识别，
+ * 避免把带触屏的 Windows 笔记本也当成手机降画质。iPadOS 桌面 UA 单独识别。 */
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const IS_MOBILE = /Android|iPhone|iPod|Mobile|Silk/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /iPad|Macintosh/.test(navigator.userAgent));
+console.log('[街机赛车] 版本 v20261029');
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))]);
 (async function() {
   try {
@@ -577,15 +590,21 @@ const wrapAngle = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.
 /* ============ 渲染器 / 场景 ============ */
 let renderer, scene, camera, dirLight;
 try {
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({
+    antialias: !IS_MOBILE,            // 移动端关 MSAA：省下的填充率对帧率的贡献远大于锯齿感知
+    powerPreference: 'high-performance'
+  });
 } catch (e) {
   showError('无法创建 WebGL 上下文，请检查浏览器是否支持 WebGL / 硬件加速。');
   throw e;
 }
+// 动态分辨率：移动端初始 1.5 倍像素比（DPR=3 的屏少算一半以上像素），帧率不足自动降档
+let pixCap = IS_MOBILE ? 1.5 : 2;
+const applyPixelRatio = () => renderer.setPixelRatio(Math.min(devicePixelRatio, pixCap));
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+applyPixelRatio();
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = IS_MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('webglcontextlost', e => {
   e.preventDefault();
@@ -598,11 +617,17 @@ scene.fog = new THREE.Fog(0x87ceeb, 300, 950);
 
 camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1500);
 
+// FOV 仅在变化时重算投影矩阵（固定机位下每帧 updateProjectionMatrix 是无谓开销）
+let _lastFov = 62;
+function setFov(f){
+  if (f !== _lastFov){ _lastFov = f; camera.fov = f; camera.updateProjectionMatrix(); }
+}
+
 scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x3f5a36, 0.9));
 dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
 dirLight.position.set(40, 70, 20);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.mapSize.set(IS_MOBILE ? 512 : 1024, IS_MOBILE ? 512 : 1024);   // 移动端阴影贴图减半：阴影渲染量降到 1/4
 dirLight.shadow.camera.left = -55; dirLight.shadow.camera.right = 55;
 dirLight.shadow.camera.top = 55;   dirLight.shadow.camera.bottom = -55;
 dirLight.shadow.camera.near = 1;   dirLight.shadow.camera.far = 260;
@@ -612,7 +637,7 @@ function onResize(){
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  applyPixelRatio();
 }
 addEventListener('resize', onResize);
 
@@ -1957,7 +1982,7 @@ addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => { if (state === 'running') togglePause(); });
 
 /* ============ 手机触控支持 ============ */
-const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const isTouch = IS_TOUCH;   // 定义提前到模块顶部（渲染器初始化要用）
 let touchActive = false;
 const touchKeys = new Map(); // 触控激活的虚拟按键（Map 支持 get/set）
 let nitroLatch = false;      // 手机版氮气：点按即喷（true=喷射中），喷完自动熄灭
@@ -1998,6 +2023,20 @@ if (isTouch){
   const tl = document.getElementById('touchLayer');
   tl.classList.add('on');
   document.body.classList.add('touch-ui'); // 供 CSS 做手机/横屏专用排版
+  // 竖屏角标提示（不全屏遮罩）
+  const updatePortrait = () => {
+    document.body.classList.toggle('portrait', window.matchMedia('(orientation: portrait)').matches);
+  };
+  updatePortrait();
+  window.addEventListener('orientationchange', updatePortrait, { passive: true });
+  // 点击竖屏提示 → 尝试进入全屏
+  const rh = document.getElementById('rotateHint');
+  if (rh) rh.addEventListener('click', () => {
+    const el = document.documentElement;
+    if (el.requestFullscreen) { el.requestFullscreen().catch(() => {}); }
+    else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); }
+    else if (el.msRequestFullscreen) { el.msRequestFullscreen(); }
+  }, { passive: true });
   // 隐藏键盘提示，改为触控提示（直接取节点：hintEl 这个变量从未声明过，原来这里必然抛 ReferenceError）
   const hintNode = document.getElementById('hint');
   if (hintNode) hintNode.textContent = '左箭头转向 · 右油门刹车 · 氮气点一下';
@@ -2219,15 +2258,6 @@ function resetCarToTrack(){
   flash('已复位');
 }
 function restart(){            // 完全重开：按模式发车 + 清计时
-  // 手机强制横屏：全屏 + 方向锁定（iOS Safari 不支持 lock，竖屏遮罩兜底）
-  if (isTouch){
-    try {
-      const req = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
-      if (req && req.then) req.then(() => {
-        try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {}
-      }).catch(() => {});
-    } catch (_) {}
-  }
   clearSkid();
   placeRacerAt(player, trackOpen ? 3 : 0, 2.5);
   player.topSpeed = 0;
@@ -2257,7 +2287,7 @@ function restart(){            // 完全重开：按模式发车 + 清计时
     bots.forEach(b => { b.group.visible = false; });
   }
   raceTime = 0; lapCount = 0; finishCount = 0;
-  speedFxEl.style.opacity = 0;   // 清掉上一局残留的暗角
+  speedFxEl.style.opacity = 0; _fxO = 0;   // 清掉上一局残留的暗角
   nitroLatch = false;            // 手机点按式氮气：重开不自动续喷
   if (nitroBtnEl){ nitroBtnEl.classList.remove('pressed'); nitroBtnEl.classList.remove('spraying'); }
   camSnap = true;
@@ -2408,14 +2438,21 @@ function showPanel(name){
 }
 
 /* ============ 更新公告 ============ */
-const UPDATE_VERSION = '20261028b';
+const UPDATE_VERSION = '20261029';
 const UPDATE_LOG = [
+  { ver: '2026-10-29', items: [
+    '移动端性能专项：赛道就近点搜索（原为每帧全表扫描），主线程大幅减负',
+    '渲染分辨率自适应：帧率不足自动降精度保流畅，满帧自动回升',
+    '移动端关闭 MSAA、阴影贴图减半，HUD/小地图/菜单阴影降频刷新',
+    '修复路面贴图每帧重传 GPU 的隐藏开销',
+    '车库缩略图改为空闲时生成，首屏加载更快',
+  ]},
   { ver: '2026-10-28', items: [
     '删除卡丁车功能，移除 GLB 模型代码',
     '修复手机端按钮延迟（touchstart 快速响应）',
+    '竖屏时显示旋转提示卡，点击可尝试全屏',
     '设置新增「转向灵敏度」滑条：×0.70 ~ ×2.00 实时生效',
     '按键布局支持自定义：设置 → 调整，拖动按钮任意摆位',
-    '手机版强制横屏：开赛自动全屏 + 方向锁定',
     '护栏升级实体墙：碰撞反弹，彻底告别冲出赛道',
     '漂移优化：触控防抖（不再一顿一顿）、完美漂移速度补偿、漂移期间加速度归零',
     '特斯拉被动重做：「动能回收」刹车时氮气快速回充',
@@ -2476,7 +2513,7 @@ function syncSettingsUI(){
     settings.steerSens = Number(sl.value);
     const sv = $('sensVal');
     if (sv) sv.textContent = '×' + settings.steerSens.toFixed(2);
-    saveSettings();
+    saveSettingsSoon();
   });
 }
 document.querySelectorAll('#fpsBtns .fps').forEach(b => {
@@ -2625,10 +2662,22 @@ function stepRacer(r, input, dt){
   let vl = r.vel.x * lx + r.vel.z * lz;
 
   // 最近采样点 → 冲出赛道判定 + 计圈进度
-  let ni = 0, nd = Infinity;
-  for (let i = 0; i < N_SAMPLES; i++){
+  // 局部窗口搜索：车速上限 100m/s × 最大步长 1/30s ≈ 3.3m/帧，采样间距约 1.4m，
+  // 上次最近点 ±90 采样（±125m）必然覆盖；把每车每帧 1800 次循环降为 181 次
+  // （4 车 60fps 时主线程每秒少跑约 39 万次循环）
+  const base = r.nearestI | 0;
+  let ni = base, nd = Infinity;
+  for (let k = -90; k <= 90; k++){
+    const i = (base + k + N_SAMPLES) % N_SAMPLES;
     const dx = r.pos.x - S[i].x, dz = r.pos.z - S[i].z, d = dx*dx + dz*dz;
     if (d < nd){ nd = d; ni = i; }
+  }
+  if (nd > 3600){   // 兜底：异常远离赛道（如未来加入传送）时退回全表扫描
+    nd = Infinity;
+    for (let i = 0; i < N_SAMPLES; i++){
+      const dx = r.pos.x - S[i].x, dz = r.pos.z - S[i].z, d = dx*dx + dz*dz;
+      if (d < nd){ nd = d; ni = i; }
+    }
   }
   r.nearestI = ni;
   const offTrack = Math.sqrt(nd) > hw + 1.05;   // 护栏在 hw+1.1，贴护栏不算出赛道（护栏已保证车不冲出）
@@ -3038,6 +3087,11 @@ if (DIFFS[settings.diff]) diffKey = settings.diff;   // 记住上次选的难度
 function saveSettings(){
   try { localStorage.setItem('arcadeSettings', JSON.stringify(settings)); } catch (_) {}
 }
+let _saveT = null;
+function saveSettingsSoon(){   // 高频输入（灵敏度滑条）防抖后再写盘，避免拖动一次写几十次
+  clearTimeout(_saveT);
+  _saveT = setTimeout(saveSettings, 300);
+}
 
 /* ============ 自定义按键布局：进入编辑模式后拖动按钮，位置存档 ============ */
 const LAYOUT_BTNS = ['btnLeft','btnRight','btnThrottle','btnBrake','btnDrift','btnNitro','btnBoost'];
@@ -3180,7 +3234,7 @@ function showGarageCar(key){
 
 // 用主渲染器把当前车型渲染成缩略图（离屏 RenderTarget → ImageData → dataURL）
 function makeCarThumb(key){
-  const w = 320, h = 190;
+  const w = 224, h = 133;   // 显示尺寸 112×64 的 2 倍已足够清晰；回读与 PNG 编码量减半
   const rt = new THREE.WebGLRenderTarget(w, h);
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   const sc = new THREE.Scene();
@@ -3266,16 +3320,20 @@ function initGarage(){
     gl.target.position.set(GARAGE_POS.x, 0.6, GARAGE_POS.z);
     scene.add(gl, gl.target);
 
-    // 每台车渲染模型图，填进选车卡
-    for (const b of document.querySelectorAll('#carBtns .car')){
+    // 车型缩略图：8 次"离屏渲染 + GPU 回读 + PNG 编码"若同步跑完会卡住首屏数百毫秒。
+    // 改为空闲时段逐张生成（每张间隔让出主线程），生成一次后 dataURL 常驻 img.src，
+    // 之后进车库不再重算——加载与缓存两头都省。
+    const thumbBtns = [...document.querySelectorAll('#carBtns .car')];
+    const genThumb = () => {
+      const b = thumbBtns.shift();
+      if (!b) return;
       const img = b.querySelector('.thumb');
-      if (!img) continue;
-      try {
-        img.src = makeCarThumb(b.dataset.car);
-      } catch (e) {
-        img.style.display = 'none';
+      if (img){
+        try { img.src = makeCarThumb(b.dataset.car); } catch (e) { img.style.display = 'none'; }
       }
-    }
+      (window.requestIdleCallback || function(f){ setTimeout(f, 80); })(genThumb);
+    };
+    (window.requestIdleCallback || function(f){ setTimeout(f, 400); })(genThumb);
     showGarageCar(selectedCar);
   } catch (e) {
     console.warn('车库初始化失败：', e);
@@ -3316,6 +3374,7 @@ function updateStreaks(dt){
 
 /* ============ 相机（追玩家车） ============ */
 let camSnap = true;
+let _fxO = 0;   // 屏幕暗角透明度缓存（变化超阈值才写 style，避免每帧触发布局）
 const camPos = new THREE.Vector3(0, 60, 140);
 const lookPt = new THREE.Vector3();
 function updateCamera(dt){
@@ -3340,17 +3399,17 @@ function updateCamera(dt){
   camera.lookAt(lookPt);
   // 速度感：固定 FOV + 屏幕暗角（不加镜头抖动，保持稳定）
   const sp = Math.min(1, Math.abs(player.vf) / P.PEAK_SPEED);
-  camera.fov = 62;  // 固定 FOV，不因速度变化
-  camera.updateProjectionMatrix();
-  speedFxEl.style.opacity = (sp * sp * 0.85).toFixed(3);   // 暗角：低速无感，极速明显收边
+  setFov(62);   // FOV 没变就不重算投影矩阵
+  const fxO = sp * sp * 0.85;   // 暗角：低速无感，极速明显收边；变化超阈值才写样式
+  if (Math.abs(fxO - _fxO) > 0.02){ _fxO = fxO; speedFxEl.style.opacity = fxO.toFixed(3); }
   updateStreaks(dt);
   dirLight.position.set(player.pos.x + 40, 70, player.pos.z + 20);
   dirLight.target.position.copy(player.pos);
   dirLight.target.updateMatrixWorld();
   // 路面纹理随车速沿 z 滚动，产生“路面掠过”的速度参照感
   if (roadMat && roadMat.map){
-    roadMat.map.offset.y -= Math.abs(player.vf) * dt * 0.012;
-    roadMat.map.needsUpdate = true;
+    // offset 是 shader uniform，改它无需重传贴图；原 needsUpdate 会每帧重新上传整张纹理
+    roadMat.map.offset.y = (roadMat.map.offset.y - Math.abs(player.vf) * dt * 0.012) % 1;
   }
 }
 
@@ -3368,11 +3427,11 @@ function updateCountdownCamera(){
   camera.position.copy(camPos);
   lookPt.set(player.pos.x, player.pos.y + 0.85, player.pos.z);
   camera.lookAt(lookPt);
-  camera.fov = 62 - 6 * e;                  // 轻微推镜，聚焦车身
-  camera.updateProjectionMatrix();
+  setFov(62 - 6 * e);                       // 轻微推镜，聚焦车身
 }
 
 /* ============ HUD ============ */
+let _nitroOn = null;   // 氮气条渐变状态缓存（喷射状态没切换就不重写渐变样式）
 function updateHUD(){
   const kmh = Math.abs(player.vf) * 3.6;
   spdEl.textContent = Math.round(kmh);
@@ -3382,11 +3441,14 @@ function updateHUD(){
   // 氮气储量
   const nv = Math.max(0, Math.min(100, player.nitro));
   nitroFill.style.width = nv + '%';
-  nitroFill.style.background = player.nitroOn
-    ? 'linear-gradient(90deg,#a5f3fc,#67e8f9)'
-    : 'linear-gradient(90deg,#38bdf8,#22d3ee)';
+  if (_nitroOn !== player.nitroOn){
+    _nitroOn = player.nitroOn;
+    nitroFill.style.background = _nitroOn
+      ? 'linear-gradient(90deg,#a5f3fc,#67e8f9)'
+      : 'linear-gradient(90deg,#38bdf8,#22d3ee)';
+    nitroPct.style.color = _nitroOn ? '#a5f3fc' : '#94a3b8';
+  }
   nitroPct.textContent = Math.round(nv) + '%';
-  nitroPct.style.color = player.nitroOn ? '#a5f3fc' : '#94a3b8';
 
   // 状态指示：极限突破 > 漂移奖励 > 漂移充能 > 极限冷却
   if (player.overT > 0){
@@ -3528,8 +3590,10 @@ function updateMinimap(){
 /* ============ 主循环 ============ */
 const clock = new THREE.Clock();
 let menuAngle = 0, frameAcc = 0;
+let hudTick = 0, shadowTick = 0;
 // 实际帧率统计（与 settings.fps 上限无关）
 let fpsFrames = 0, fpsLastMs = performance.now(), fpsCur = 0;
+let fpsLowStreak = 0, fpsHighStreak = 0;
 function tickFps(){
   fpsFrames++;
   const now = performance.now();
@@ -3538,6 +3602,18 @@ function tickFps(){
     fpsFrames = 0; fpsLastMs = now;
     fpsInline.textContent = fpsCur + ' fps';
     fpsInline.style.color = fpsCur >= 55 ? '#4ade80' : fpsCur >= 30 ? '#fbbf24' : '#f87171';
+    // 动态分辨率（仅移动端）：连续 3 秒低于 45fps → 渲染精度降 0.25（最低 1.0）；
+    // 连续 8 秒满帧 → 升回来（最高 1.5）。以小幅牺牲清晰度保住流畅度。
+    if (IS_MOBILE){
+      if (fpsCur < 45){ fpsLowStreak++; fpsHighStreak = 0; }
+      else if (fpsCur >= 57){ fpsHighStreak++; fpsLowStreak = 0; }
+      else { fpsLowStreak = 0; fpsHighStreak = 0; }
+      if (fpsLowStreak >= 3 && pixCap > 1.0){
+        pixCap = Math.max(1.0, pixCap - 0.25); applyPixelRatio(); fpsLowStreak = 0;
+      } else if (fpsHighStreak >= 8 && pixCap < 1.5){
+        pixCap = Math.min(1.5, pixCap + 0.25); applyPixelRatio(); fpsHighStreak = 0;
+      }
+    }
   }
 }
 function loop(){
@@ -3587,15 +3663,18 @@ function loop(){
       if (mode === 'race') updateStandings();
       updateGhost();
       updateCamera(dt);
-      updateHUD();
-      updateMinimap();
+      // HUD 与小地图降频刷新：DOM 样式 / Canvas 2D 操作不必跟满 60fps
+      // （速度表 20Hz、小地图 15Hz，肉眼无差异，样式开销降为 1/3~1/4）
+      hudTick++;
+      if (hudTick % 3 === 0) updateHUD();
+      if (hudTick % 4 === 0) updateMinimap();
     } else if (state === 'menu'){
       const inGarage = (uiPanel === 'garage');
       menuAngle += dt * (inGarage ? 0.09 : 0.12);
       if (inGarage){
         camera.position.set(GARAGE_POS.x + Math.cos(menuAngle) * 13.5, 5.2, GARAGE_POS.z + Math.sin(menuAngle) * 13.5);
         camera.lookAt(GARAGE_POS.x, 1.2, GARAGE_POS.z);
-        camera.fov = 42;
+        setFov(42);
         showcase.rotation.y += dt * 0.45; // 展台慢转
       } else {
         const mr = Math.min(trackRadius, 620);   // 长赛道限幅，避免镜头离得太远
@@ -3605,14 +3684,21 @@ function loop(){
           trackCenter.z + Math.sin(menuAngle) * mr
         );
         camera.lookAt(trackCenter.x, 0, trackCenter.z);
-        camera.fov = 62;
+        setFov(62);
       }
-      camera.updateProjectionMatrix();
     }
     // 小地图始终显示，不随状态切换隐藏
     if (!mmShown){
       mmShown = true;
       mmCanvas.style.display = 'block';
+    }
+    // 阴影降频：菜单/暂停/结算画面场景近乎静止，每 4 帧更新一次阴影贴图
+    // （省电 + 释放 GPU 给菜单动画）；比赛中恢复全速更新
+    if (state === 'running' || state === 'countdown'){
+      renderer.shadowMap.autoUpdate = true;
+    } else {
+      renderer.shadowMap.autoUpdate = false;
+      if ((shadowTick++ & 3) === 0) renderer.shadowMap.needsUpdate = true;
     }
     renderer.render(scene, camera);
     tickFps();
