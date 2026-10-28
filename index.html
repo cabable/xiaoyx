@@ -42,9 +42,11 @@
   #overlay button:hover{background:#38bdf8;}
   #overlay button:disabled{background:#475569;border-color:#64748b;cursor:wait;}
   #menuBtns{display:flex;flex-direction:column;gap:10px;}
-  #carBtns{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+  /* 车库车辆网格：auto-fit 自适应列数，窄屏手机自动降为 2 列 / 1 列，不溢出 */
+  #carBtns{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;
+    width:min(520px,calc(100vw - 40px));}
   #carBtns .car{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12.5px;padding:6px 6px;min-width:0;width:auto;}
-  #carBtns .car .thumb{width:112px;height:64px;object-fit:cover;border-radius:5px;background:#0e1319;border:1px solid rgba(255,255,255,.08);pointer-events:none;}
+  #carBtns .car .thumb{width:100%;max-width:112px;height:64px;object-fit:cover;border-radius:5px;background:#0e1319;border:1px solid rgba(255,255,255,.08);pointer-events:none;}
   #carBtns .car small{font-size:10.5px;color:#94a3b8;font-weight:400;pointer-events:none;}
   /* 被动技能小字 */
   #carBtns .car small.psk{font-size:10px;color:#ffd166;font-weight:600;letter-spacing:.2px;pointer-events:none;}
@@ -52,7 +54,7 @@
   #carBtns .car.active small{color:#dcfce7;}
   #carBtns .car[data-car="apex"]{border-color:rgba(255,209,102,.55);}
   #carBtns .car[data-car="apex"] small{color:#ffd166;}
-  #overlay button.mode{min-width:300px;}
+  #overlay button.mode{min-width:300px;max-width:calc(100vw - 40px);}
   #overlay p.small{font-size:13px;color:#64748b;text-align:center;line-height:1.7;}
   #menuMain{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;}
   #garagePanel{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;}
@@ -497,6 +499,8 @@ const IS_MOBILE = /Android|iPhone|iPod|Mobile|Silk/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && /iPad|Macintosh/.test(navigator.userAgent));
 console.log('[街机赛车] 版本 v20261029');
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))]);
+// THREE 未就绪前锁定菜单按钮：点了也不会有反应（事件在 initGame 里才绑定），不如明确禁用
+menuBtns.forEach(b => b.disabled = true);
 (async function() {
   try {
     const THREE_CDNS = [
@@ -1979,12 +1983,30 @@ addEventListener('keydown', e => {
   keys.add(k);
 });
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
-addEventListener('blur', () => { if (state === 'running') togglePause(); });
+/* 输入状态总重置：窗口失焦 / 切后台 / 暂停 / 退赛 / 重开时调用，
+ * 清掉键盘与触控的全部持续输入，杜绝「松手后车还在跑」的残留。
+ * （失焦时 keyup 可能永远收不到，必须主动清，不能指望按键自然释放） */
+function resetAllInputs(){
+  keys.clear();
+  resetTouchInput();   // 非触屏设备为空操作（见触控区）
+}
+addEventListener('blur', () => {
+  resetAllInputs();
+  if (state === 'running') togglePause();
+});
+/* 手机切换应用 / 锁屏：切后台必须暂停并清输入，恢复时不会带残影 */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){
+    resetAllInputs();
+    if (state === 'running') togglePause();
+  }
+});
 
 /* ============ 手机触控支持 ============ */
 const isTouch = IS_TOUCH;   // 定义提前到模块顶部（渲染器初始化要用）
 let touchActive = false;
 const touchKeys = new Map(); // 触控激活的虚拟按键（Map 支持 get/set）
+let resetTouchInput = () => {}; // 触控输入统一重置入口（触屏初始化后替换为真实实现）
 let nitroLatch = false;      // 手机版氮气：点按即喷（true=喷射中），喷完自动熄灭
 let nitroBtnEl = null;       // 氮气按钮节点（喷射状态高亮用）
 
@@ -2042,7 +2064,9 @@ if (isTouch){
   if (hintNode) hintNode.textContent = '左箭头转向 · 右油门刹车 · 氮气点一下';
   /* 按钮：逐指跟踪（按 identifier 计数）。
    * 浏览器可能对同一按钮派发多指触摸，或两指的 touchend 乱序到达——
-   * 全部抬起才释放，杜绝误触后「提前断开」造成的断触。 */
+   * 全部抬起才释放，杜绝误触后「提前断开」造成的断触。
+   * 每个按钮把自己的「强制释放」注册进 touchResets，供状态切换时统一清空。 */
+  const touchResets = [];
   function bindBtn(el, on, off){
     const ids = new Set();
     const down = e => {
@@ -2058,6 +2082,7 @@ if (isTouch){
     el.addEventListener('touchstart', down, {passive:false});
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
+    touchResets.push(() => { ids.clear(); off(); el.classList.remove('pressed'); });
   }
   tl.addEventListener('contextmenu', e => e.preventDefault()); // 长按不弹菜单
   // 转向：左右两键独立跟踪再合成，松开一边不影响另一边
@@ -2075,14 +2100,25 @@ if (isTouch){
     const ids = new Set();
     el.addEventListener('touchstart', e => {
       e.preventDefault();
+      const had = ids.size > 0;
       for (const t of e.changedTouches) ids.add(t.identifier);
-      nitroLatch = !nitroLatch;
-      el.classList.toggle('pressed', nitroLatch);
-      el.classList.toggle('spraying', nitroLatch);
+      // 仅「第一根手指按下」时切换喷射状态：多指同按/连点只算一次，
+      // 避免双指 touchstart 各 toggle 一次把状态弹回原样
+      if (!had){
+        nitroLatch = !nitroLatch;
+        el.classList.toggle('pressed', nitroLatch);
+        el.classList.toggle('spraying', nitroLatch);
+      }
     }, {passive:false});
     const up = e => { for (const t of e.changedTouches) ids.delete(t.identifier); };
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
+    touchResets.push(() => {
+      ids.clear();
+      nitroLatch = false;
+      el.classList.remove('pressed');
+      el.classList.remove('spraying');
+    });
   }
   // 漂移：单独处理，接入防抖逻辑（不经过 touchKeys）
   {
@@ -2100,12 +2136,28 @@ if (isTouch){
     el.addEventListener('touchstart', down, {passive:false});
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
+    touchResets.push(() => { ids.clear(); _driftRaw.pressed = false; _driftRaw.released = false; el.classList.remove('pressed'); });
   }
   // 功能按钮（油门/刹车/极限）
   const btnMap = {btnThrottle:'throttle', btnBrake:'brake', btnBoost:'over'};
   for (const [id, key] of Object.entries(btnMap)){
     bindBtn(document.getElementById(id), () => touchKeys.set(key, 1), () => touchKeys.delete(key));
   }
+  /* 触控输入统一重置：暂停 / 退赛 / 重开 / 失焦 / 切后台时调用。
+   * 逐按钮强制释放 + 清空虚拟按键映射 + 复位漂移防抖与氮气锁存，
+   * 保证重新开始比赛、返回主菜单、切换游戏状态时不残留任何触控输入。 */
+  resetTouchInput = () => {
+    touchResets.forEach(f => { try { f(); } catch (_) {} });
+    steerL = false; steerR = false;
+    touchKeys.clear();
+    _driftRaw.pressed = false;
+    _driftRaw.released = false;
+    nitroLatch = false;
+    if (nitroBtnEl){
+      nitroBtnEl.classList.remove('pressed');
+      nitroBtnEl.classList.remove('spraying');
+    }
+  };
 }
 
 function playerInput(){
@@ -2197,6 +2249,30 @@ const ghostKey = () => 'arcadeRacerGhost:' + currentTrack + ':r' + (TRACK_DEFS[c
 let ghostRec = [];            // 当前圈的轨迹录制 [{t,x,z,yaw}]，每 0.1s 一帧
 let recTimer = 0;
 let ghostData = null;         // 最快圈的轨迹（幽灵回放用，按赛道加载）
+/* 幽灵录像安全上限：0.1s/帧 × 3600 = 单圈最长 6 分钟。
+ * 防止慢速跑圈 / 存档被塞垃圾数据导致 localStorage 无限膨胀；超出即停止录制。 */
+const MAX_GHOST_FRAMES = 3600;
+/* 幽灵数据严格校验：损坏 / 被篡改的存档绝不能带进回放。
+ * 要求：数组、每帧 t/x/z/yaw 全为有限数值、时间戳严格递增、坐标在合理范围内；
+ * 非法帧逐条丢弃，清洗后不足 2 帧则整体放弃（返回 null，游戏正常跑，只是没幽灵）。 */
+function sanitizeGhost(raw){
+  try {
+    if (!Array.isArray(raw)) return null;
+    const arr = [];
+    let lastT = -Infinity;
+    for (const f of raw){
+      if (!f || typeof f !== 'object') continue;
+      const t = Number(f.t), x = Number(f.x), z = Number(f.z), yaw = Number(f.yaw);
+      if (!Number.isFinite(t) || !Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(yaw)) continue;
+      if (t <= lastT) continue;                       // 必须严格递增
+      if (Math.abs(x) > 1e6 || Math.abs(z) > 1e6 || Math.abs(yaw) > 1e3) continue; // 异常坐标/角度
+      arr.push({ t, x, z, yaw });
+      lastT = t;
+      if (arr.length >= MAX_GHOST_FRAMES) break;      // 超限截断
+    }
+    return arr.length >= 2 ? arr : null;
+  } catch (_) { return null; }
+}
 
 /* ============ 游戏状态 / 计时 ============ */
 let state = 'menu';           // menu | countdown | running | paused | finished
@@ -2204,7 +2280,7 @@ let countdownT = 0;           // 倒计时剩余秒数（0 = 已开始）
 let raceTime = 0, lapCount = 0, bestLap = null, finishCount = 0;
 function loadTrackRecords(){
   bestLap = null;
-  try { const b = localStorage.getItem(bestKey()); if (b) bestLap = parseFloat(b); } catch (_) {}
+  try { const b = localStorage.getItem(bestKey()); if (b){ const v = parseFloat(b); if (Number.isFinite(v) && v > 0) bestLap = v; } } catch (_) {}
   ghostData = null;
   if (trackOpen){
     gIdx = 0; gLastT = -1;
@@ -2214,8 +2290,9 @@ function loadTrackRecords(){
   try {
     const g = localStorage.getItem(ghostKey());
     if (g){
-      const arr = JSON.parse(g);
-      if (Array.isArray(arr) && arr.length >= 2){ arr.sort((a, b) => a.t - b.t); ghostData = arr; }
+      let arr = null;
+      try { arr = JSON.parse(g); } catch (_) {}   // JSON 损坏 → 视同无存档
+      ghostData = sanitizeGhost(arr);             // 逐帧校验，异常数据安全丢弃
     }
   } catch (_) {}
   gIdx = 0; gLastT = -1;
@@ -2258,6 +2335,7 @@ function resetCarToTrack(){
   flash('已复位');
 }
 function restart(){            // 完全重开：按模式发车 + 清计时
+  resetAllInputs();            // 键盘 + 触控输入全部清零，上一局的按键不许带进新一局
   clearSkid();
   placeRacerAt(player, trackOpen ? 3 : 0, 2.5);
   player.topSpeed = 0;
@@ -2441,6 +2519,13 @@ function showPanel(name){
 const UPDATE_VERSION = '20261029';
 const UPDATE_LOG = [
   { ver: '2026-10-29', items: [
+    '修复输入残留：窗口失焦 / 切后台 / 暂停 / 重开 / 回菜单时自动清空键盘与触控输入，杜绝松手后车还在跑',
+    '手机切后台自动暂停并清输入，恢复后不带残影',
+    '氮气按钮多指同按只算一次，不再被第二根手指意外关闭',
+    '触控输入统一重置：转向 / 油门 / 刹车 / 漂移 / 氮气 / 极限全部强制释放',
+    '幽灵存档严格校验：损坏或异常数据自动安全丢弃，不再影响游戏；录像增加单圈 6 分钟上限防存储膨胀',
+    '车库选车界面自适应窄屏，手机上自动变 2 列，不再溢出',
+    '极端报错时自动弹出暂停菜单，不再静默卡死画面',
     '移动端性能专项：赛道就近点搜索（原为每帧全表扫描），主线程大幅减负',
     '渲染分辨率自适应：帧率不足自动降精度保流畅，满帧自动回升',
     '移动端关闭 MSAA、阴影贴图减半，HUD/小地图/菜单阴影降频刷新',
@@ -2630,17 +2715,20 @@ function endRace(){
 }
 function backToMenu(){
   state = 'menu';
+  resetAllInputs();   // 回菜单清输入，防止下一局开局就带着上一局的油门
   showPanel('home');
   overlay.classList.remove('hidden');
 }
 function togglePause(){
   if (state === 'running'){
     state = 'paused';
+    resetAllInputs(); // 暂停即清输入：暂停期间不再加速/转向，恢复后也不残留
     msgEl.style.opacity = 0;
     showPanel('paused');
     overlay.classList.remove('hidden');
   } else if (state === 'paused'){
     state = 'running';
+    resetAllInputs(); // 恢复前再清一次，兜底暂停期间的任何按键残留
     showPanel('home');            // 先把面板切走，再隐藏覆盖层
     overlay.classList.add('hidden');
     clock.getDelta();             // 丢弃暂停期间累积的 delta
@@ -2649,6 +2737,7 @@ function togglePause(){
 // 退出比赛，回到主菜单
 function quitToMenu(){
   state = 'menu';
+  resetAllInputs();
   showPanel('home');
   overlay.classList.remove('hidden');
   clock.getDelta();
@@ -2939,11 +3028,15 @@ function stepRacer(r, input, dt){
           let isBest = false;
           if (bestLap == null || r.lastLap < bestLap){
             bestLap = r.lastLap; isBest = true;
-            ghostData = ghostRec.slice();
-            try {
-              localStorage.setItem(bestKey(), String(bestLap));
-              localStorage.setItem(ghostKey(), JSON.stringify(ghostData));
-            } catch (_) {}
+            // 保存前先清洗：只把合法帧写进存档，避免异常数据入库
+            const clean = sanitizeGhost(ghostRec);
+            if (clean){
+              ghostData = clean;
+              try {
+                localStorage.setItem(bestKey(), String(bestLap));
+                localStorage.setItem(ghostKey(), JSON.stringify(clean));
+              } catch (_) {}
+            }
           }
           // 本圈录制结束：立刻开一段新缓冲，避免上一圈数据混进下圈（旧 bug：幽灵永远只有第一圈）
           ghostRec = [{ t: 0, x: r.pos.x, z: r.pos.z, yaw: r.yaw }];
@@ -3649,14 +3742,16 @@ function loop(){
       if (mode === 'race'){
         for (const b of bots) stepRacer(b, aiControl(b), dt);
       } else if (!trackOpen){
-        // 练习模式：录制本圈轨迹（0.1s 一帧，作幽灵数据）
+        // 练习模式：录制本圈轨迹（0.1s 一帧，作幽灵数据）；超出上限停止录制防无限膨胀
         recTimer += dt;
         if (recTimer >= 0.1){
           recTimer = 0;
-          ghostRec.push({
-            t: raceTime - player.lapStartTime,
-            x: player.pos.x, z: player.pos.z, yaw: player.yaw
-          });
+          if (ghostRec.length < MAX_GHOST_FRAMES){
+            ghostRec.push({
+              t: raceTime - player.lapStartTime,
+              x: player.pos.x, z: player.pos.z, yaw: player.yaw
+            });
+          }
         }
       }
       collideRacers();
@@ -3705,6 +3800,9 @@ function loop(){
   } catch (e) {
     showError('循环内异常：' + e.message);
     state = 'paused';
+    // 必须把菜单弹出来：否则玩家面对一个静默冻结的画面无法操作
+    resetAllInputs();
+    try { showPanel('paused'); overlay.classList.remove('hidden'); } catch (_) {}
   }
 }
 // 初始化：只摆车做菜单背景，绝不自动开跑（restart 会把 state 设为 running）
