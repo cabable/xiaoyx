@@ -61,6 +61,21 @@
   #overlay .opt.active small{color:#dbeafe;}
   #overlay .opt:disabled{opacity:.4;cursor:not-allowed;}
   #settingsPanel{width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;}
+  /* 更新公告面板 */
+  #updatePanel{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;}
+  #updateList{width:calc(100vw - 48px);max-width:520px;max-height:52vh;overflow-y:auto;
+    background:rgba(15,23,32,.65);border:1px solid rgba(255,255,255,.1);border-radius:10px;
+    padding:12px 16px;text-align:left;}
+  #updateList::-webkit-scrollbar{width:6px;}
+  #updateList::-webkit-scrollbar-thumb{background:rgba(56,189,248,.4);border-radius:3px;}
+  #updateList h3{margin:10px 0 4px;font-size:14px;color:#7dd3fc;}
+  #updateList h3:first-child{margin-top:0;}
+  #updateList li{font-size:13px;color:#cbd5e1;line-height:1.9;list-style:none;padding-left:14px;position:relative;}
+  #updateList li::before{content:'·';position:absolute;left:2px;color:#38bdf8;font-weight:700;}
+  #updateList .new-badge{display:inline-block;font-size:10px;background:#0ea5e9;color:#fff;
+    border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:1px;}
+  .dot-badge{position:absolute;top:2px;right:6px;width:8px;height:8px;border-radius:50%;
+    background:#f87171;box-shadow:0 0 6px rgba(248,113,113,.8);}
   /* 清空缓存按钮（危险操作，红色描边，需点两次确认） */
   #overlay .dangerbtn{background:transparent;border:1px solid rgba(248,113,113,.55);color:#fca5a5;
     font-size:13px;padding:7px 16px;border-radius:8px;}
@@ -126,6 +141,8 @@
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
   #touchLayer.on{display:block;}
   .touch-zone{position:absolute;pointer-events:auto;touch-action:none;}
+  /* 手机端全局消除点击延迟 */
+  button, a, [role="button"]{touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 
   /* ── 左拇指：左右箭头转向（参考 QQ 飞车）── */
   #btnLeft,#btnRight{
@@ -209,17 +226,42 @@
   }
   #btnBoost.pressed{box-shadow:0 0 20px rgba(139,92,246,.7);}
 
+  /* 灵敏度滑条 */
+  #sensSlider{flex:1;min-width:120px;height:6px;-webkit-appearance:none;appearance:none;
+    background:linear-gradient(90deg,#38bdf8,#22d3ee);border-radius:3px;outline:none;cursor:pointer;}
+  #sensSlider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;
+    border-radius:50%;background:#e2e8f0;border:3px solid #38bdf8;box-shadow:0 2px 8px rgba(0,0,0,.5);}
+  #sensSlider::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#e2e8f0;
+    border:3px solid #38bdf8;box-shadow:0 2px 8px rgba(0,0,0,.5);}
+
   /* 布局预设按钮 */
   .layout-opt{padding:5px 14px;font-size:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#cbd5e1;border-radius:7px;cursor:pointer;flex:1;text-align:center;}
   .layout-opt.active{background:#0ea5e9;border-color:#38bdf8;color:#fff;}
   #layoutRow .setVal{font-size:11px;color:#64748b;width:auto;flex:1;}
 
-  /* 竖屏提示（横屏时自动隐藏） */
+  /* 布局编辑模式：按钮加虚线框，方便辨认可拖动 */
+  #touchLayer.editing .touch-zone{outline:2px dashed rgba(56,189,248,.9);outline-offset:2px;opacity:.95;}
+  #touchLayer.editing{background:rgba(10,14,20,.55);}
+  #layoutEditBar{display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    padding:8px 18px;border-radius:999px;background:rgba(10,14,20,.9);
+    border:1px solid rgba(56,189,248,.6);color:#7dd3fc;font-size:13px;letter-spacing:1px;
+    white-space:nowrap;pointer-events:auto;z-index:60;cursor:pointer;}
+  #touchLayer.editing #layoutEditBar{display:block;}
+
+  /* 竖屏提示（横屏时自动隐藏）；强制横屏：竖屏时全屏遮罩挡住游戏 */
   #rotateTip{display:none;position:absolute;top:64px;left:50%;transform:translateX(-50%);
     padding:6px 14px;border-radius:999px;background:rgba(10,14,20,.75);
     border:1px solid rgba(56,189,248,.35);color:#7dd3fc;font-size:12px;letter-spacing:1px;
     white-space:nowrap;pointer-events:none;}
-  @media (orientation:portrait){ body.touch-ui #rotateTip{display:block;} }
+  @media (orientation:portrait){
+    body.touch-ui #rotateTip{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+      position:fixed;inset:0;top:0;left:0;right:0;bottom:0;transform:none;
+      background:rgba(7,10,16,.97);z-index:90;pointer-events:auto;
+      font-size:20px;padding:24px;text-align:center;}
+    body.touch-ui #rotateTip .rt-icon{font-size:64px;animation:rtspin 1.6s ease-in-out infinite;}
+    @keyframes rtspin{0%,100%{transform:rotate(0)}50%{transform:rotate(90deg)}}
+  }
   /* 触屏设备不显示键盘提示条 */
   body.touch-ui #hint{display:none;}
   /* 漂移提示移到顶部居中 */
@@ -296,7 +338,8 @@
 <!-- 手机触控层 -->
 <div id="touchLayer">
   <div id="trackLabel"></div>
-  <div id="rotateTip">↻ 建议横屏游玩</div>
+  <div id="rotateTip"><span class="rt-icon">↻</span>请横屏游玩<br><small style="font-size:13px;color:#94a3b8">锁定竖屏旋转手机即可进入</small></div>
+  <div id="layoutEditBar">✓ 完成（保存布局）</div>
   <div id="btnLeft" class="touch-zone btn-r">←</div>
   <div id="btnRight" class="touch-zone btn-r">→</div>
   <div id="btnThrottle" class="touch-zone btn-r">油门</div>
@@ -315,8 +358,14 @@
       <button class="mode" data-mode="race">竞技模式</button>
     </div>
     <div class="menuRow">
-    <button id="garageBtn" class="ghostbtn">车库选车</button>
+    <button id="garageBtn" class="ghostbtn" style="position:relative">车库选车<span id="garageDot" class="dot-badge" style="display:none"></span></button>
+    <button id="updateBtn" class="ghostbtn" style="position:relative">更新公告<span id="updateDot" class="dot-badge" style="display:none"></span></button>
     </div>
+  </div>
+  <div id="updatePanel" style="display:none">
+    <h1>更新公告</h1>
+    <div id="updateList"></div>
+    <button id="updateBack" class="ghostbtn">我知道了</button>
   </div>
   <div id="practicePanel" style="display:none">
     <h1>练习模式</h1>
@@ -365,7 +414,7 @@
       <button class="car" data-car="default" title="均衡调校：氮气回充速度 +70%"><img class="thumb" alt="默认跑车">默认跑车<small class="spd">C 级 · 加速 26</small><small class="psk">均衡调校</small></button>
       <button class="car" data-car="gti" title="弯道王：抓地力 +28%"><img class="thumb" alt="高尔夫 GTI">高尔夫 GTI<small class="spd">C 级 · 加速 28</small><small class="psk">弯道王</small></button>
       <button class="car" data-car="p911" title="后置引擎：完美漂移加速时长 +60%"><img class="thumb" alt="保时捷 911">保时捷 911<small class="spd">B 级 · 加速 31</small><small class="psk">后置引擎</small></button>
-      <button class="car" data-car="model3" title="智能四驱：冲出赛道掉速 -60%"><img class="thumb" alt="特斯拉 Model 3">特斯拉 Model 3<small class="spd">B 级 · 加速 33</small><small class="psk">智能四驱</small></button>
+      <button class="car" data-car="model3" title="动能回收：刹车时氮气快速回充"><img class="thumb" alt="特斯拉 Model 3">特斯拉 Model 3<small class="spd">B 级 · 加速 33</small><small class="psk">动能回收</small></button>
       <button class="car" data-car="su7" title="澎湃动力：高速段加速不衰减"><img class="thumb" alt="小米 SU7">小米 SU7<small class="spd">A 级 · 加速 36</small><small class="psk">澎湃动力</small></button>
       <button class="car" data-car="u9" title="云辇漂移：漂移集气速度 +100%"><img class="thumb" alt="仰望 U9">仰望 U9<small class="spd">A 级 · 加速 38</small><small class="psk">云辇漂移</small></button>
       <button class="car" data-car="apex" title="超频引擎：极限突破冷却 -40%"><img class="thumb" alt="幻影 X1">幻影 X1<small class="spd">S 级 · 加速 44</small><small class="psk">超频引擎</small></button>
@@ -387,12 +436,16 @@
       <button id="clearCacheBtn" class="dangerbtn">清空圈速与幽灵</button>
       <span id="clearCacheMsg"></span>
     </div>
+    <div class="setRow" id="sensRow">
+      <label>转向灵敏度</label>
+      <input type="range" id="sensSlider" min="0.7" max="2" step="0.05" value="1">
+      <span class="setVal" id="sensVal"></span>
+    </div>
     <div class="setRow" id="layoutRow">
       <label>按键布局</label>
-      <button class="layout-opt" data-layout="standard">标准</button>
-      <button class="layout-opt" data-layout="compact">紧凑</button>
-      <button class="layout-opt" data-layout="wide">宽距</button>
-      <span class="setVal">按屏幕自动</span>
+      <button id="layoutEditBtn" class="layout-opt">调整</button>
+      <button id="layoutResetBtn" class="layout-opt">恢复默认</button>
+      <span class="setVal" id="layoutMsg"></span>
     </div>
     <!-- FPS 始终显示在速度表右上角，无需此开关 -->
     <button id="settingsBack" class="ghostbtn">返回主菜单</button>
@@ -428,26 +481,33 @@ window.addEventListener('unhandledrejection', e => showError(String(e.reason)));
 
 /* 多 CDN 动态加载 Three.js（自动降级，避免单一 CDN 被墙导致整个游戏无法启动） */
 let THREE = null;
-const THREE_CDNS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js',
-  'https://unpkg.com/three@0.160.0/build/three.module.js',
-  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'
-];
-const menuBtns = Array.from(document.querySelectorAll('#overlay button.mode, #overlay button.car, #overlay button.ghostbtn'));
-menuBtns.forEach(b => b.disabled = true);
+const menuBtns = Array.from(document.querySelectorAll('#overlay button.mode, #overlay button.car, #overlay button.ghostbtn') || []);
+console.log('[街机赛车] 版本 v20261028');
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms))]);
-for (const url of THREE_CDNS){
+(async function() {
   try {
-    THREE = await withTimeout(import(url), 12000); // 挂起的源 12 秒后跳下一个
-    break;
-  } catch (e) { /* 换下一个源 */ }
-}
-if (!THREE){
-  menuBtns.forEach(b => { b.textContent = '加载失败'; });
-  showError('Three.js 三个 CDN（cdnjs/unpkg/jsdelivr）均加载失败，请检查网络，或下载 three.module.js 到本地后修改脚本顶部的 THREE_CDNS 地址。');
-  throw new Error('THREE load failed');
-}
-menuBtns.forEach(b => b.disabled = false);
+    const THREE_CDNS = [
+      'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js',
+      'https://unpkg.com/three@0.160.0/build/three.module.js',
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'
+    ];
+    for (const url of THREE_CDNS){
+      try {
+        THREE = await withTimeout(import(url), 12000);
+        break;
+      } catch (e) { /* 换下一个源 */ }
+    }
+    if (!THREE){
+      throw new Error('THREE load failed');
+    }
+    initGame();
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    menuBtns.forEach(b => b.disabled = false);
+  }
+})();
+function initGame() {
 
 /* ============ 可调参数（调参看这里） ============ */
 const P = {
@@ -460,7 +520,7 @@ const P = {
   maxReverse: 12,     // 倒车极速
   drag: 0.05,         // 空气阻力系数（0.05：极速300km/h 时仍可全速到达）
   rolling: 0.5,       // 滚动阻力 m/s^2
-  offDrag: 2.2,       // 冲出赛道的额外阻力
+  // offDrag（草地衰减）已删除：护栏保证车无法冲出赛道
   // --- 横向 / 漂移 ---
   grip: 22.0,           // 正常抓地（加大：300km/h 也贴地）
   driftGrip: 3.5,       // 漂移侧向抓地（中等：有阻力感，不会太飘）
@@ -1273,7 +1333,7 @@ const CAR_TYPES = {
   },
   model3: {
     name: '特斯拉 Model 3', short: 'Model 3', cls: 'B', paint: 0x2f5f8a, hasEvBar: true, maxSpeed: 83.3, accel: 33, topKmh: 300,
-    passive: { name: '智能四驱', desc: '冲出赛道掉速 -60%', mods: { offDrag: 0.4 } },
+    passive: { name: '动能回收', desc: '刹车时氮气快速回充', mods: { brakeRegen: 4 } },
     len: 4.69, width: 1.85, cabinWidth: 1.6, height: 1.44,
     body: [[-2.32,0.28],[-2.34,0.88],[-2.1,0.98],[-0.7,1.0],[1.0,0.93],[1.9,0.78],[2.24,0.6],[2.32,0.32],[2.05,0.18],[-2.05,0.18]],
     cabin: [[-1.9,0.98],[-0.95,1.38],[0.15,1.44],[0.95,0.98]],
@@ -1339,7 +1399,7 @@ const PASSIVE_DEFAULTS = {
   boostDur: 1,      // 完美漂移加速时长倍率
   overCd: 1,        // 极限突破冷却倍率
   taperEnd: 0.85,   // 加速衰减起点：越大越晚衰减（高速仍有力）
-  offDrag: 1        // 冲出赛道额外阻力倍率
+  brakeRegen: 1     // 刹车时氮气回充倍率（动能回收）
 };
 const skOf = key => Object.assign({}, PASSIVE_DEFAULTS,
   (((CAR_TYPES[key] || CAR_TYPES.default).passive || {}).mods) || {});
@@ -1902,6 +1962,38 @@ let touchActive = false;
 const touchKeys = new Map(); // 触控激活的虚拟按键（Map 支持 get/set）
 let nitroLatch = false;      // 手机版氮气：点按即喷（true=喷射中），喷完自动熄灭
 let nitroBtnEl = null;       // 氮气按钮节点（喷射状态高亮用）
+
+/* 漂移输入防抖：消除手机触控抖动造成的漂移一顿一顿 */
+const _driftRaw = { pressed: false, confirmT: 0, released: false, releaseT: 0 };
+const DRIFT_CONFIRM_MS  = 80;  // 按下后需稳定保持此毫秒才确认激活
+const DRIFT_RELEASE_MS  = 120; // 松开后需稳定保持此毫秒才确认释放
+function updateDriftDebounce(rawPressed, dt){
+  if (rawPressed && !_driftRaw.pressed){
+    // 刚按下，开始计时确认
+    _driftRaw.confirmT = DRIFT_CONFIRM_MS / 1000;
+    _driftRaw.released = false;
+  } else if (!rawPressed && _driftRaw.pressed){
+    // 刚松开，开始计时释放
+    _driftRaw.releaseT = DRIFT_RELEASE_MS / 1000;
+    _driftRaw.released = true;
+  }
+  if (_driftRaw.pressed){
+    if (_driftRaw.released){
+      _driftRaw.releaseT -= dt;
+      if (_driftRaw.releaseT <= 0){
+        _driftRaw.pressed = false; // 稳定释放
+      }
+    }
+  } else {
+    if (!_driftRaw.released){
+      _driftRaw.confirmT -= dt;
+      if (_driftRaw.confirmT <= 0 && rawPressed){
+        _driftRaw.pressed = true; // 稳定按下
+      }
+    }
+  }
+}
+function getDriftInput(){ return _driftRaw.pressed ? 1 : 0; }
 if (isTouch){
   const tl = document.getElementById('touchLayer');
   tl.classList.add('on');
@@ -1953,8 +2045,25 @@ if (isTouch){
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
   }
-  // 功能按钮（氮气单独处理，见上）
-  const btnMap = {btnThrottle:'throttle', btnBrake:'brake', btnDrift:'hand', btnBoost:'over'};
+  // 漂移：单独处理，接入防抖逻辑（不经过 touchKeys）
+  {
+    const el = document.getElementById('btnDrift');
+    const ids = new Set();
+    const down = e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) ids.add(t.identifier);
+      _driftRaw.pressed = true;   // 立即标记（由 updateDriftDebounce 负责确认）
+    };
+    const up = e => {
+      for (const t of e.changedTouches) ids.delete(t.identifier);
+      if (!ids.size) _driftRaw.pressed = false;
+    };
+    el.addEventListener('touchstart', down, {passive:false});
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+  }
+  // 功能按钮（油门/刹车/极限）
+  const btnMap = {btnThrottle:'throttle', btnBrake:'brake', btnBoost:'over'};
   for (const [id, key] of Object.entries(btnMap)){
     bindBtn(document.getElementById(id), () => touchKeys.set(key, 1), () => touchKeys.delete(key));
   }
@@ -1963,14 +2072,14 @@ if (isTouch){
 function playerInput(){
   return {
     // 键盘：a/d 或 方向键左/右
-    steer:   ((keys.has('a') || keys.has('arrowleft'))  ? 1 : 0)
+    steer:   (((keys.has('a') || keys.has('arrowleft'))  ? 1 : 0)
            - ((keys.has('d') || keys.has('arrowright')) ? 1 : 0)
             // 触控摇杆（-1..1 连续值）
-            + (touchKeys.get('steer') || 0),
+            + (touchKeys.get('steer') || 0)) * (settings.steerSens || 1),   // 灵敏度倍率
     throttle: (keys.has('w') || keys.has('arrowup') ? 1 : 0) + (touchKeys.get('throttle') ? 1 : 0)
-            + (touchKeys.get('hand') ? 1 : 0),   // 手机：按住漂移自动带油门，右拇指不必跨两排
+            + getDriftInput(),   // 手机：按住漂移自动带油门，右拇指不必跨两排
     brake:    (keys.has('s') || keys.has('arrowdown') ? 1 : 0) + (touchKeys.get('brake') ? 1 : 0),
-    hand:     keys.has(' ') || !!touchKeys.get('hand'),
+    hand:     keys.has(' ') || getDriftInput(),
     nitro:    keys.has('shift') || !!touchKeys.get('nitro') || nitroLatch,
     over:     (keys.has('control') || keys.has('x')) || !!touchKeys.get('over')
   };
@@ -2110,6 +2219,15 @@ function resetCarToTrack(){
   flash('已复位');
 }
 function restart(){            // 完全重开：按模式发车 + 清计时
+  // 手机强制横屏：全屏 + 方向锁定（iOS Safari 不支持 lock，竖屏遮罩兜底）
+  if (isTouch){
+    try {
+      const req = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+      if (req && req.then) req.then(() => {
+        try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {}
+      }).catch(() => {});
+    } catch (_) {}
+  }
   clearSkid();
   placeRacerAt(player, trackOpen ? 3 : 0, 2.5);
   player.topSpeed = 0;
@@ -2214,6 +2332,14 @@ function bindModeButton(b){
 }
 menuBtns.forEach(b => { if (b.classList.contains('mode')) bindModeButton(b); });
 
+// 手机端快速点击：touchstart 先于 click 响应
+document.querySelectorAll('#overlay button, .touch-zone').forEach(btn => {
+  btn.addEventListener('touchstart', function(e) {
+    e.preventDefault(); // 阻止 300ms 延迟
+    this.click();
+  }, { passive: false });
+});
+
 // —— 竞技设置面板：难度 / 赛道 / 开始 / 返回 ——
 function syncRaceUI(){
   document.querySelectorAll('#diffBtns .opt').forEach(b => {
@@ -2270,7 +2396,57 @@ function showPanel(name){
   settingsPanel.style.display = name === 'settings' ? 'flex' : 'none';
   pausePanel.style.display = name === 'paused' ? 'flex' : 'none';
   menuResult.style.display = name === 'result' ? 'flex' : 'none';
+  const up = document.getElementById('updatePanel');
+  if (up) up.style.display = name === 'update' ? 'flex' : 'none';
+  // 从公告面板返回主菜单时清除红点
+  if (name === 'update'){
+    const dot = document.getElementById('updateDot');
+    if (dot) dot.style.display = 'none';
+    settings.seenUpdate = UPDATE_VERSION;
+    saveSettings();
+  }
 }
+
+/* ============ 更新公告 ============ */
+const UPDATE_VERSION = '20261028b';
+const UPDATE_LOG = [
+  { ver: '2026-10-28', items: [
+    '删除卡丁车功能，移除 GLB 模型代码',
+    '修复手机端按钮延迟（touchstart 快速响应）',
+    '设置新增「转向灵敏度」滑条：×0.70 ~ ×2.00 实时生效',
+    '按键布局支持自定义：设置 → 调整，拖动按钮任意摆位',
+    '手机版强制横屏：开赛自动全屏 + 方向锁定',
+    '护栏升级实体墙：碰撞反弹，彻底告别冲出赛道',
+    '漂移优化：触控防抖（不再一顿一顿）、完美漂移速度补偿、漂移期间加速度归零',
+    '特斯拉被动重做：「动能回收」刹车时氮气快速回充',
+    '极限突破：每局限用 2 次',
+  ]},
+  { ver: '2026-10-27', items: [
+    '赛道加宽至 25m，新增掉头弯与连续弯道',
+    '车辆峰值速度系统：普通驾驶封顶 360km/h，氮气/极限突破',
+    '转向手感重做：角速度惯性 + 高速阻尼，告别轻飘飘',
+  ]},
+];
+function renderUpdateList(){
+  const box = document.getElementById('updateList');
+  if (!box) return;
+  box.innerHTML = UPDATE_LOG.map(u =>
+    '<h3>' + u.ver + (u.ver === UPDATE_LOG[0].ver ? '<span class="new-badge">NEW</span>' : '') + '</h3>'
+    + '<ul style="margin:0;padding:0">' + u.items.map(i => '<li>' + i + '</li>').join('') + '</ul>'
+  ).join('');
+}
+renderUpdateList();
+// 有新公告未读 → 主菜单按钮亮红点（settings 定义在后方，延迟到模块求值完）
+setTimeout(() => {
+  try {
+    if (settings.seenUpdate !== UPDATE_VERSION){
+      const dot = document.getElementById('updateDot');
+      if (dot) dot.style.display = 'block';
+    }
+  } catch (_) {}
+}, 0);
+$('updateBtn').addEventListener('click', e => { e.currentTarget.blur(); showPanel('update'); });
+$('updateBack').addEventListener('click', e => { e.currentTarget.blur(); showPanel('home'); });
 $('garageBtn').addEventListener('click', e => { e.currentTarget.blur(); showPanel('garage'); });
 $('resumeBtn').addEventListener('click', e => { e.currentTarget.blur(); if (state === 'paused') togglePause(); });
 $('quitBtn').addEventListener('click', e => { e.currentTarget.blur(); quitToMenu(); });
@@ -2286,7 +2462,22 @@ function syncSettingsUI(){
   document.querySelectorAll('#fpsBtns .fps').forEach(b => {
     b.classList.toggle('active', Number(b.dataset.fps) === settings.fps);
   });
-  syncLayoutUI(settings.layout || 'standard');
+  // 灵敏度按钮高亮 + 数值显示
+  // 灵敏度滑条
+  const sl = $('sensSlider');
+  if (sl) sl.value = settings.steerSens;
+  const sv = $('sensVal');
+  if (sv) sv.textContent = '×' + Number(settings.steerSens).toFixed(2);
+}
+// 灵敏度滑条：拖动即生效
+{
+  const sl = $('sensSlider');
+  sl.addEventListener('input', () => {
+    settings.steerSens = Number(sl.value);
+    const sv = $('sensVal');
+    if (sv) sv.textContent = '×' + settings.steerSens.toFixed(2);
+    saveSettings();
+  });
 }
 document.querySelectorAll('#fpsBtns .fps').forEach(b => {
   b.addEventListener('click', () => {
@@ -2440,7 +2631,7 @@ function stepRacer(r, input, dt){
     if (d < nd){ nd = d; ni = i; }
   }
   r.nearestI = ni;
-  const offTrack = Math.sqrt(nd) > hw + 0.8;
+  const offTrack = Math.sqrt(nd) > hw + 1.05;   // 护栏在 hw+1.1，贴护栏不算出赛道（护栏已保证车不冲出）
 
   // 转向：用角速度 + 阻尼模拟车身重量感，避免"轻飘飘"
   const speed = Math.abs(vf);
@@ -2524,7 +2715,7 @@ function stepRacer(r, input, dt){
       r.nitroOn = r.nitro > 0;
     } else {
       r.nitroOn = false;
-      if (!want) r.nitro = Math.min(100, r.nitro + P.nitroRegen * r.sk.nitroRegen * dt);
+      if (!want) r.nitro = Math.min(100, r.nitro + P.nitroRegen * r.sk.nitroRegen * (input.brake ? r.sk.brakeRegen : 1) * dt);
     }
     if (r.driftT > 0.2) r.nitro = Math.min(100, r.nitro + P.nitroDriftGain * r.sk.nitroDrift * dt);
     if (r.nitroOn){ nitroMul = P.nitroGain; nitroAcc = P.nitroAccelMul; }
@@ -2553,8 +2744,7 @@ function stepRacer(r, input, dt){
   }
   vf -= vf * P.drag * dt;
   vf -= Math.sign(vf) * Math.min(Math.abs(vf), P.rolling * dt);
-  if (offTrack) vf -= vf * Math.min(1, P.offDrag * r.sk.offDrag * dt);
-
+  // 草地衰减已删除：护栏保证车无法冲出赛道，offTrack 不再触发减速
   // 横向抓地（hand = 漂移）
   const grip = (input.hand ? P.driftGrip : P.grip) * (input.hand ? 1 : r.sk.grip);
   const vlLost = vl * Math.min(1, grip * dt);   // 本帧被抓地"拉回"的侧滑量
@@ -2840,62 +3030,138 @@ function updateGhost(){
 }
 
 /* ============ 设置（帧率上限 / 帧率显示） ============ */
-const settings = { fps: 60, showFps: true, track: 'loop', diff: 'normal' };
+const settings = { fps: 60, showFps: true, track: 'loop', diff: 'normal', steerSens: 1 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('arcadeSettings') || '{}')); } catch (_) {}
 if (settings.fps !== 30 && settings.fps !== 60) settings.fps = 60; // 旧存档的 90 帧已移除，归一为 60
+if (typeof settings.steerSens !== 'number' || settings.steerSens < 0.5 || settings.steerSens > 2.5) settings.steerSens = 1;
 if (DIFFS[settings.diff]) diffKey = settings.diff;   // 记住上次选的难度
 function saveSettings(){
   try { localStorage.setItem('arcadeSettings', JSON.stringify(settings)); } catch (_) {}
 }
 
-/* 布局预设：每个预设是各按钮的 right/left/bottom 百分比坐标（相对 touchLayer） */
-const LAYOUTS = {
-  standard: {
-    btnLeft:  {left:16, bottom:20}, btnRight: {left:122, bottom:20},
-    btnThrottle: {right:16, bottom:20}, btnBrake: {right:120, bottom:20},
-    btnDrift:  {right:126, bottom:114}, btnNitro: {right:16, bottom:118},
-    btnBoost:  {right:22, bottom:208},
-  },
-  compact: {
-    btnLeft:  {left:10, bottom:14}, btnRight: {left:108, bottom:14},
-    btnThrottle: {right:12, bottom:14}, btnBrake: {right:108, bottom:14},
-    btnDrift:  {right:114, bottom:92}, btnNitro: {right:12, bottom:94},
-    btnBoost:  {right:18, bottom:158},
-  },
-  wide: {
-    btnLeft:  {left:8, bottom:18}, btnRight: {left:136, bottom:18},
-    btnThrottle: {right:8, bottom:18}, btnBrake: {right:136, bottom:18},
-    btnDrift:  {right:142, bottom:118}, btnNitro: {right:8, bottom:122},
-    btnBoost:  {right:14, bottom:218},
-  },
-};
+/* ============ 自定义按键布局：进入编辑模式后拖动按钮，位置存档 ============ */
+const LAYOUT_BTNS = ['btnLeft','btnRight','btnThrottle','btnBrake','btnDrift','btnNitro','btnBoost'];
+let layoutEdit = false;          // 是否处于布局编辑模式
 
-function applyLayout(key){
-  const ly = LAYOUTS[key] || LAYOUTS.standard;
-  settings.layout = key;
-  saveSettings();
-  syncLayoutUI(key);
-  for (const [id, pos] of Object.entries(ly)){
-    const el = document.getElementById(id);
-    if (!el) continue;
-    el.style.left = pos.left != null ? pos.left + 'px' : '';
-    el.style.right = pos.right != null ? pos.right + 'px' : '';
-    el.style.bottom = pos.bottom != null ? pos.bottom + 'px' : '';
+function applySavedLayout(){
+  const pos = settings.btnPos;
+  if (!pos) return;
+  for (const id of LAYOUT_BTNS){
+    const el = document.getElementById(id), p = pos[id];
+    if (!el || !p) continue;
+    el.style.left = p.left + 'px';
+    el.style.top = p.top + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
   }
 }
 
-function syncLayoutUI(key){
-  document.querySelectorAll('#layoutRow .layout-opt').forEach(b => {
-    b.classList.toggle('active', b.dataset.layout === key);
-  });
+function resetLayout(){
+  settings.btnPos = null;
+  saveSettings();
+  for (const id of LAYOUT_BTNS){
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.style.left = el.style.top = el.style.right = el.style.bottom = '';
+  }
+  const m = $('layoutMsg');
+  if (m) m.textContent = '已恢复默认';
 }
 
-// 初始化布局
-applyLayout(settings.layout || 'standard');
-// 监听布局按钮
-document.querySelectorAll('#layoutRow .layout-opt').forEach(b => {
-  b.addEventListener('click', () => applyLayout(b.dataset.layout));
+// 把按钮坐标写进存档（拖拽结束后调用）
+function saveLayoutPos(){
+  const pos = {};
+  for (const id of LAYOUT_BTNS){
+    const el = document.getElementById(id);
+    if (!el) continue;
+    pos[id] = { left: el.offsetLeft, top: el.offsetTop };
+  }
+  settings.btnPos = pos;
+  saveSettings();
+}
+
+function setLayoutEdit(on){
+  layoutEdit = on;
+  const tl = document.getElementById('touchLayer');
+  tl.classList.toggle('editing', on);
+  // 非触屏设备平时隐藏触控层；编辑时强制显示出来供鼠标拖拽
+  if (!isTouch) tl.classList.toggle('on', on);
+  const btn = $('layoutEditBtn'), m = $('layoutMsg');
+  if (btn) btn.textContent = on ? '保存布局' : '调整';
+  if (m) m.textContent = on ? '拖动按钮调整位置' : '';
+  const bar = $('layoutEditBar');
+  if (bar) bar.style.display = on ? 'block' : '';
+  // 编辑时隐藏菜单遮罩层，露出全部按钮；完成后恢复
+  const ov = document.getElementById('overlay');
+  if (ov) ov.classList.toggle('hidden', on);
+  if (on){
+    // 编辑前先把 bottom/right 定位换算成 left/top，方便拖拽
+    for (const id of LAYOUT_BTNS){
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const base = tl.getBoundingClientRect();
+      el.style.left = (r.left - base.left) + 'px';
+      el.style.top = (r.top - base.top) + 'px';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    }
+  } else {
+    saveLayoutPos();
+    if (ov) ov.classList.remove('hidden');   // 回到设置面板
+  }
+}
+
+/* 拖拽（Pointer Events：鼠标 + 触屏统一处理） */
+let dragBtn = null, dragOffX = 0, dragOffY = 0;
+{
+  const tl = document.getElementById('touchLayer');
+  // 触屏编辑模式：捕获阶段拦截触控，不传给游戏按钮（拖拽交给 pointer 事件）
+  tl.addEventListener('touchstart', e => {
+    if (!layoutEdit) return;
+    // 「完成」条不拦截，让它的 click 正常触发
+    if (e.target.closest('#layoutEditBar')) return;
+    e.stopPropagation(); e.preventDefault();
+  }, {capture:true, passive:false});
+
+  tl.addEventListener('pointerdown', e => {
+    if (!layoutEdit) return;
+    if (e.target.closest('#layoutEditBar')) return;
+    const btn = e.target.closest('.touch-zone');
+    if (!btn) return;
+    e.preventDefault();
+    const br = btn.getBoundingClientRect();
+    dragOffX = e.clientX - br.left;
+    dragOffY = e.clientY - br.top;
+    dragBtn = btn;
+    if (btn.setPointerCapture){ try { btn.setPointerCapture(e.pointerId); } catch (_) {} }
+  });
+  tl.addEventListener('pointermove', e => {
+    if (!layoutEdit || !dragBtn) return;
+    const base = tl.getBoundingClientRect();
+    const x = Math.max(0, Math.min(base.width - dragBtn.offsetWidth, e.clientX - base.left - dragOffX));
+    const y = Math.max(0, Math.min(base.height - dragBtn.offsetHeight, e.clientY - base.top - dragOffY));
+    dragBtn.style.left = x + 'px';
+    dragBtn.style.top = y + 'px';
+  });
+  const endDrag = () => { dragBtn = null; };
+  tl.addEventListener('pointerup', endDrag);
+  tl.addEventListener('pointercancel', endDrag);
+}
+
+// 顶部「完成」条：点击保存并退出编辑
+$('layoutEditBar').addEventListener('click', () => { if (layoutEdit) setLayoutEdit(false); });
+$('layoutEditBtn').addEventListener('click', e => {
+  e.currentTarget.blur();
+  setLayoutEdit(!layoutEdit);
 });
+$('layoutResetBtn').addEventListener('click', e => {
+  e.currentTarget.blur();
+  if (layoutEdit) setLayoutEdit(false);
+  resetLayout();
+});
+// 恢复存档的布局
+applySavedLayout();
 
 /* ============ 车库展厅（菜单选车） ============ */
 const GARAGE_POS = new THREE.Vector3(600, 0, -620);
@@ -3301,6 +3567,8 @@ function loop(){
     }
     if (state === 'running'){
       raceTime += dt;
+      // 漂移防抖：更新缓冲状态后再读取输入
+      if (isTouch) updateDriftDebounce(_driftRaw.pressed, dt);
       stepRacer(player, playerInput(), dt);
       if (mode === 'race'){
         for (const b of bots) stepRacer(b, aiControl(b), dt);
@@ -3364,11 +3632,16 @@ initGarage(); // 车库展厅 + 各车型缩略图
 refreshHomeInfo();
 syncSettingsUI();
 showPanel('home');
+// 有未读新公告 → 首次进主菜单自动弹出
+if (settings.seenUpdate !== UPDATE_VERSION) showPanel('update');
 // 调试钩子：仅 ?debug=1 时暴露，用于 G4 性能门禁取值
 if (new URLSearchParams(location.search).has('debug')){
   window.__dbg = { renderer, scene, player, P, CAR_TYPES, TRACK_DEFS };
 }
 loop();
+}
 </script>
 </body>
 </html>
+
+
