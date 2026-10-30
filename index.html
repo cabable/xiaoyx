@@ -268,6 +268,8 @@
   #rotateHint .rt-icon{font-size:28px;display:block;margin-bottom:4px;}
   #rotateHint .rt-sub{font-size:11px;color:#94a3b8;display:block;margin-top:2px;}
   body.touch-ui.portrait #rotateHint{display:flex;flex-direction:column;align-items:center;}
+  /* 自动消失：开赛 5 秒后或点击后加 dismissed 隐藏，不永久挡住赛道 */
+  body.touch-ui.portrait #rotateHint.dismissed{display:none;}
   /* 触屏设备不显示键盘提示条 */
   body.touch-ui #hint{display:none;}
   /* 漂移提示移到顶部居中 */
@@ -421,9 +423,9 @@
     <div class="setRow">
       <label>难度</label>
       <div id="diffBtns">
-        <button class="opt" data-diff="easy">简单<small>C 级车</small></button>
-        <button class="opt" data-diff="normal">一般<small>B 级车</small></button>
-        <button class="opt" data-diff="hard">困难<small>A 级车</small></button>
+        <button class="opt" data-diff="easy">简单<small></small></button>
+        <button class="opt" data-diff="normal">一般<small></small></button>
+        <button class="opt" data-diff="hard">困难<small></small></button>
       </div>
     </div>
     <div class="setRow">
@@ -465,7 +467,7 @@
     </div>
     <div class="setRow">
       <label>缓存数据</label>
-      <button id="clearCacheBtn" class="dangerbtn">清空圈速与幽灵</button>
+      <button id="clearCacheBtn" class="dangerbtn">清空数据</button>
       <span id="clearCacheMsg"></span>
     </div>
     <div class="setRow" id="sensRow">
@@ -476,7 +478,7 @@
     <div class="setRow" id="layoutRow">
       <label>按键布局</label>
       <button id="layoutEditBtn" class="layout-opt">调整</button>
-      <button id="layoutResetBtn" class="layout-opt">恢复默认</button>
+      <button id="layoutResetBtn" class="layout-opt">恢复</button>
       <span class="setVal" id="layoutMsg"></span>
     </div>
     <!-- FPS 始终显示在速度表右上角，无需此开关 -->
@@ -2030,6 +2032,7 @@ const isTouch = IS_TOUCH;   // 定义提前到模块顶部（渲染器初始化�
 let touchActive = false;
 const touchKeys = new Map(); // 触控激活的虚拟按键（Map 支持 get/set）
 let resetTouchInput = () => {}; // 触控输入统一重置入口（触屏初始化后替换为真实实现）
+let showRotateHint = () => {}; // 竖屏提示显示入口（触屏初始化后替换为真实实现）
 let nitroLatch = false;      // 手机版氮气：点按即喷（true=喷射中），喷完自动熄灭
 let nitroBtnEl = null;       // 氮气按钮节点（喷射状态高亮用）
 
@@ -2074,9 +2077,23 @@ if (isTouch){
   };
   updatePortrait();
   window.addEventListener('orientationchange', updatePortrait, { passive: true });
-  // 点击竖屏提示 → 尝试进入全屏
+  // 点击竖屏提示 → 尝试进入全屏，并让提示立即消失（不再挡赛道）
   const rh = document.getElementById('rotateHint');
+  /* 竖屏提示自动消失：showRotateHint 每次开赛重新显示，5 秒后自动淡出；
+   * 不做的话提示卡会一直压在赛道中央，竖屏驾驶全程被挡 */
+  let rotateHintTimer = null;
+  showRotateHint = () => {
+    if (!rh) return;
+    clearTimeout(rotateHintTimer);
+    rh.classList.remove('dismissed');
+    rotateHintTimer = setTimeout(() => rh.classList.add('dismissed'), 5000);
+  };
+  const hideRotateHint = () => {
+    clearTimeout(rotateHintTimer);
+    if (rh) rh.classList.add('dismissed');
+  };
   if (rh) rh.addEventListener('click', () => {
+    hideRotateHint();
     const el = document.documentElement;
     if (el.requestFullscreen) { el.requestFullscreen().catch(() => {}); }
     else if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); }
@@ -2408,6 +2425,7 @@ function restart(){            // 完全重开：按模式发车 + 清计时
   recTimer = 0; gLastT = -1; gIdx = 0;
   // 3-2-1-GO 倒计时，避免起跑瞬间误操作
   state = 'countdown'; countdownT = 4;
+  showRotateHint();              // 竖屏提示重新显示，5 秒后自动消失（横屏下该元素本就不显示）
   overlay.classList.add('hidden');
   const he = document.getElementById('hudExit');
   if (he) he.style.display = 'block';
@@ -2549,6 +2567,8 @@ const UPDATE_LOG = [
     '幽灵存档严格校验：损坏或异常数据自动安全丢弃，不再影响游戏；录像增加单圈 6 分钟上限防存储膨胀',
     '车库选车界面自适应窄屏，手机上自动变 2 列，不再溢出',
     '竖屏比赛布局适配：修复转向键与刹车重叠、速度表/氮气条压住按钮的问题',
+    '竖屏「旋转手机」提示不再永久遮挡：开赛显示 5 秒自动消失，点击也可立即关闭，重开时重新提示',
+    '自定义按键布局按横/竖屏分开保存：修复竖屏下按钮错位到旧横屏位置的问题（旧存档自动迁移）',
     '极端报错时自动弹出暂停菜单，不再静默卡死画面',
     '移动端性能专项：赛道就近点搜索（原为每帧全表扫描），主线程大幅减负',
     '渲染分辨率自适应：帧率不足自动降精度保流畅，满帧自动回升',
@@ -3214,32 +3234,49 @@ function saveSettingsSoon(){   // 高频输入（灵敏度滑条）防抖后再�
 const LAYOUT_BTNS = ['btnLeft','btnRight','btnThrottle','btnBrake','btnDrift','btnNitro','btnBoost'];
 let layoutEdit = false;          // 是否处于布局编辑模式
 
-function applySavedLayout(){
-  const pos = settings.btnPos;
-  if (!pos) return;
-  for (const id of LAYOUT_BTNS){
-    const el = document.getElementById(id), p = pos[id];
-    if (!el || !p) continue;
-    el.style.left = p.left + 'px';
-    el.style.top = p.top + 'px';
-    el.style.right = 'auto';
-    el.style.bottom = 'auto';
-  }
+/* 布局存档按横/竖屏分开：横屏拖的位置套到竖屏会全部错位
+ * （旧版只存一份 btnPos，内联样式优先级高于竖屏专用 CSS，导致竖屏按钮位置不对） */
+function curOrientKey(){
+  return window.matchMedia('(orientation: portrait)').matches ? 'btnPosP' : 'btnPosL';
 }
-
-function resetLayout(){
-  settings.btnPos = null;
+// 旧版单一 btnPos 存档迁移为横屏布局（旧存档只可能是在横屏下保存的）
+if (settings.btnPos && !settings.btnPosL){
+  settings.btnPosL = settings.btnPos;
+  delete settings.btnPos;
   saveSettings();
+}
+function applySavedLayout(){
+  const pos = settings[curOrientKey()] || null;
   for (const id of LAYOUT_BTNS){
     const el = document.getElementById(id);
     if (!el) continue;
-    el.style.left = el.style.top = el.style.right = el.style.bottom = '';
+    const p = pos ? pos[id] : null;
+    if (p){
+      el.style.left = p.left + 'px';
+      el.style.top = p.top + 'px';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    } else {
+      // 当前方向没有自定义布局 → 清掉内联样式，交给 CSS 媒体查询排版
+      el.style.left = el.style.top = el.style.right = el.style.bottom = '';
+    }
   }
+}
+// 旋转屏幕时重新套用对应方向的布局（延时等浏览器完成尺寸切换）
+const _orientMq = window.matchMedia('(orientation: portrait)');
+const _onOrientChange = () => setTimeout(() => { if (!layoutEdit) applySavedLayout(); }, 300);
+if (_orientMq.addEventListener) _orientMq.addEventListener('change', _onOrientChange);
+else window.addEventListener('orientationchange', _onOrientChange);
+
+function resetLayout(){
+  settings.btnPos = null; settings.btnPosL = null; settings.btnPosP = null;
+  saveSettings();
+  applySavedLayout();
   const m = $('layoutMsg');
   if (m) m.textContent = '已恢复默认';
 }
 
-// 把按钮坐标写进存档（拖拽结束后调用）
+// 把按钮坐标写进存档（拖拽结束后调用，只写当前方向的布局）
 function saveLayoutPos(){
   const pos = {};
   for (const id of LAYOUT_BTNS){
@@ -3247,7 +3284,7 @@ function saveLayoutPos(){
     if (!el) continue;
     pos[id] = { left: el.offsetLeft, top: el.offsetTop };
   }
-  settings.btnPos = pos;
+  settings[curOrientKey()] = pos;
   saveSettings();
 }
 
