@@ -423,9 +423,9 @@
     <div class="setRow">
       <label>难度</label>
       <div id="diffBtns">
-        <button class="opt" data-diff="easy">简单<small></small></button>
-        <button class="opt" data-diff="normal">一般<small></small></button>
-        <button class="opt" data-diff="hard">困难<small></small></button>
+        <button class="opt" data-diff="easy">简单<small>C 级车</small></button>
+        <button class="opt" data-diff="normal">一般<small>B 级车</small></button>
+        <button class="opt" data-diff="hard">困难<small>A 级车</small></button>
       </div>
     </div>
     <div class="setRow">
@@ -467,7 +467,7 @@
     </div>
     <div class="setRow">
       <label>缓存数据</label>
-      <button id="clearCacheBtn" class="dangerbtn">清空数据</button>
+      <button id="clearCacheBtn" class="dangerbtn">清空圈速与幽灵</button>
       <span id="clearCacheMsg"></span>
     </div>
     <div class="setRow" id="sensRow">
@@ -478,7 +478,7 @@
     <div class="setRow" id="layoutRow">
       <label>按键布局</label>
       <button id="layoutEditBtn" class="layout-opt">调整</button>
-      <button id="layoutResetBtn" class="layout-opt">恢复</button>
+      <button id="layoutResetBtn" class="layout-opt">恢复默认</button>
       <span class="setVal" id="layoutMsg"></span>
     </div>
     <!-- FPS 始终显示在速度表右上角，无需此开关 -->
@@ -578,9 +578,9 @@ const P = {
   boostGain: 1.15,      // 完美漂移补偿：速度 ×1.15（补偿掉的速度）
   boostDuration: 2.5,   // 补偿加速持续秒数
   // --- 相机 ---
-  camDist: 15.5, camHeight: 4.5, camLerp: 5.0, lookAhead: 7,
+  camDist: 12.0, camHeight: 3.3, camLerp: 5.0, lookAhead: 7,   // 机位更低更近：车身姿态（侧倾/俯仰）才看得出来
   // --- 表现 ---
-  roll: 0.12,         // 过弯侧倾 rad（峰值）
+  roll: 0.42,         // 过弯侧倾系数（普通弯约 6°，漂移封顶 12.6°）
   // --- 碰撞 ---
   colRadius: 1.1,     // 默认碰撞半径（实际按各车型车宽 ×0.6 计算，见 applyCarDims）
   colOffset: 1.1,     // 默认碰撞圆偏移（实际按各车型车长 ×0.25 计算）
@@ -634,6 +634,10 @@ renderer.setSize(innerWidth, innerHeight);
 applyPixelRatio();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = IS_MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+// 色调映射：ACES 模拟电影级动态范围，提升画面质感
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('webglcontextlost', e => {
   e.preventDefault();
@@ -641,8 +645,36 @@ renderer.domElement.addEventListener('webglcontextlost', e => {
 });
 
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 300, 950);
+/* 天空：等距柱状渐变贴图（比纯色更有层次，1 张 1024×512 画布，成本可忽略）
+ * 上半球：高空深蓝 → 中天蓝 → 地平线灰白；下半球：草地绿，与地面/雾衔接 */
+const HORIZON_HEX = 0xcfe3f0;
+const skyTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 512;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 512);
+  grd.addColorStop(0.00, '#0b3358');
+  grd.addColorStop(0.28, '#2f7cb8');
+  grd.addColorStop(0.46, '#8dc2e4');
+  grd.addColorStop(0.50, '#cfe3f0');
+  grd.addColorStop(0.54, '#7d9c78');
+  grd.addColorStop(1.00, '#3d5c3d');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 1024, 512);
+  // 太阳光晕（右上方），给金属漆一个明确的高光方向
+  const sun = g.createRadialGradient(760, 96, 0, 760, 96, 190);
+  sun.addColorStop(0, 'rgba(255,252,235,0.95)');
+  sun.addColorStop(0.25, 'rgba(255,246,205,0.45)');
+  sun.addColorStop(1, 'rgba(255,246,205,0)');
+  g.fillStyle = sun;
+  g.fillRect(0, 0, 1024, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
+scene.background = skyTex;
+scene.fog = new THREE.Fog(HORIZON_HEX, 300, 950);
 
 camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1500);
 
@@ -656,10 +688,19 @@ scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x3f5a36, 0.9));
 dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
 dirLight.position.set(40, 70, 20);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(IS_MOBILE ? 512 : 1024, IS_MOBILE ? 512 : 1024);   // 移动端阴影贴图减半：阴影渲染量降到 1/4
+dirLight.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);   // 提升阴影精度：车身边缘不再出现锯齿台阶
 dirLight.shadow.camera.left = -55; dirLight.shadow.camera.right = 55;
 dirLight.shadow.camera.top = 55;   dirLight.shadow.camera.bottom = -55;
 dirLight.shadow.camera.near = 1;   dirLight.shadow.camera.far = 260;
+// 阴影偏移：消除自阴影摩尔纹（peter-panning 与 acne 的折中）
+dirLight.shadow.bias = -0.0008;
+dirLight.shadow.normalBias = 0.02;
+// 环境贴图：直接由天空渐变生成（与背景同源，金属反射与视野中的天空一致，不会出现"两种天空"）
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+const envMap = pmremGenerator.fromEquirectangular(skyTex).texture;
+scene.environment = envMap;
+pmremGenerator.dispose();   // PMREM 只在这里用一次，立即释放内部 RT
 scene.add(dirLight, dirLight.target);
 
 function onResize(){
@@ -736,7 +777,8 @@ const TRACK_DEFS = {
 let currentTrack = 'loop';
 let trackOpen = false;   // 开放式赛道（无闭环，用于极速测试）
 let trackLenValue = 1000;                  // 赛道弧长（米）
-let trackCurv = new Float32Array(N_SAMPLES); // 每个采样点的曲率 1/m
+let trackCurv = new Float32Array(N_SAMPLES); // 每个采样点的曲率 1/m（无符号）
+let trackCurvSign = new Int8Array(N_SAMPLES); // 弯向：+1 左弯 / -1 右弯（供 AI 走内线）
 let curve = null;
 let S = [], T = [];
 
@@ -760,6 +802,9 @@ function setTrackData(key){
     const b = trackOpen ? T[Math.min(i + 1, N_SAMPLES - 1)] : T[(i + 1) % N_SAMPLES];
     const dAng = Math.acos(clamp(a.x * b.x + a.z * b.z, -1, 1));
     trackCurv[i] = dAng / (2 * dsPer);
+    // 弯向（内线方向）：车道偏移 +lateral 指向车头左侧，故左弯记 +1
+    // 推导：左转时航向角增大，切线叉积 a×b 为负 → 取反后左弯得 +1
+    trackCurvSign[i] = (a.x * b.z - a.z * b.x) > 0 ? -1 : 1;
   }
 
   // 赛道中心与尺度（供菜单环视镜头自适应）
@@ -948,88 +993,99 @@ trackGroup.add(buildStrip(0, N_SAMPLES - 1, -hw + 0.55, -hw + 0.75, 0.04,
   trackGroup.add(inst);
 }
 
-// 护栏：沿赛道两侧连续设置（实体墙，无缝隙）
+// 护栏：沿赛道两侧连续带状实体墙（内侧面 + 顶面 + 外侧面）
+// 旧实现：每段只在相邻两采样点的"中点"生成一片 0.12m 宽的竖板，段距约 1.08m，
+//        实际观感是一排间隔一米的白色薄片（虚线栅栏），不是墙；且材质开了颜色数组却没开 vertexColors。
+// 新实现：沿路径逐采样点连成连续条带，三个面共用同一条顶点链，拐弯处自然衔接。
 {
-  const railHeight = 0.9;
-  const BARRIER_DIST = hw + 1.1; // 碰撞触发距离
-  window.__barrierDist = BARRIER_DIST;
-  const railMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
-  const postMat = new THREE.MeshLambertMaterial({ color: 0xbbbbbb });
+  const WALL_H = 0.75;        // 墙高（低矮，不挡视线）
+  const WALL_T = 0.14;        // 墙厚
+  const INSET = hw + 1.5;     // 墙内侧面到中心线的距离（碰撞边界见 stepRacer）
+  window.__barrierDist = INSET;
 
-  for (let side = -1; side <= 1; side += 2) {
-    // 连续墙：逐段计算，每段刚好接上下一段
-    const posArr = [], colArr = [], idxArr = [];
-    // 立柱：每隔 4 段加一缝
-    const postSteps = 4;
-    const posP = [], colP = [], idxP = [];
-    const pw = 0.12, ph = railHeight, pt = 0.12;
+  // flatShading：顶点在相邻面之间共享，computeVertexNormals 会把法线平均掉，
+  // 墙面变成"圆角"且整体偏暗；用平面着色让每段各算各的法线，墙体才有正常的受光
+  // emissive 很轻：背光面只吃天空环境光会发蓝发暗，加一点自发光让它读起来像混凝土
+  const wallMat = new THREE.MeshLambertMaterial({
+    color: 0xe8edf2, side: THREE.DoubleSide, flatShading: true,
+    emissive: 0x39414a, emissiveIntensity: 0.55
+  });
+  const capMat  = new THREE.MeshLambertMaterial({
+    color: 0xc0392b, side: THREE.DoubleSide, flatShading: true,
+    emissive: 0x3d1210, emissiveIntensity: 0.55
+  });
+  const postMat = new THREE.MeshLambertMaterial({ color: 0x8f98a2, emissive: 0x252a30, emissiveIntensity: 0.5 });
 
-    for (let i = 0; i < N_SAMPLES; i++) {
+  const wrap = !trackOpen;                       // 闭环赛道首尾相连
+  const nSeg = wrap ? N_SAMPLES : N_SAMPLES - 1;
+
+  for (let side = -1; side <= 1; side += 2){
+    // 预处理：每个采样点在墙内侧面上的位置 + 外法线
+    const chain = [];
+    for (let i = 0; i < N_SAMPLES; i++){
       const p = S[i], t = T[i];
-      const sx = t.z, sz = -t.x;
-      const px = p.x + sx * (hw + 1.5) * side;
-      const pz = p.z + sz * (hw + 1.5) * side;
-      // 法线（侧方向）和切线（路向）
-      const nx = sx, nz = sz;
-      const tx = t.x, tz = t.z;
-
-      if (i < N_SAMPLES - 1) {
-        const p2 = S[i + 1], t2 = T[i + 1];
-        const sx2 = t2.z, sz2 = -t2.x;
-        const px2 = p2.x + sx2 * (hw + 1.5) * side;
-        const pz2 = p2.z + sz2 * (hw + 1.5) * side;
-        // 中点位置和法线 —— 相邻段共享顶点，无缝
-        const mx = (px + px2) / 2, mz = (pz + pz2) / 2;
-        const mnx = (sx + sx2) / 2, mnz = (sz + sz2) / 2;
-        const mnlen = Math.sqrt(mnx * mnx + mnz * mnz) || 1;
-        const nnx = mnx / mnlen, nnz = mnz / mnlen;
-
-        const h = railHeight;
-        const thk = 0.06; // 板厚半宽
-        // 四角：外下、内下、内上、外上（共享中点，无缝）
-        const vi = posArr.length / 3;
-        posArr.push(
-          mx + nnx * thk, 0,      mz + nnz * thk,
-          mx - nnx * thk, 0,      mz - nnz * thk,
-          mx - nnx * thk, h,      mz - nnz * thk,
-          mx + nnx * thk, h,      mz + nnz * thk
-        );
-        colArr.push(
-          0.87, 0.87, 0.87,
-          0.87, 0.87, 0.87,
-          0.93, 0.93, 0.93,
-          0.93, 0.93, 0.93
-        );
-        idxArr.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
-
-        // 立柱
-        if (i % postSteps === 0) {
-          const pi = posP.length / 3;
-          posP.push(
-            mx + nnx * 0.06, 0, mz + nnz * 0.06,
-            mx - nnx * 0.06, 0, mz - nnz * 0.06,
-            mx - nnx * 0.06, h, mz - nnz * 0.06,
-            mx + nnx * 0.06, h, mz + nnz * 0.06
-          );
-          colP.push(0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72, 0.72);
-          idxP.push(pi, pi + 1, pi + 2, pi, pi + 2, pi + 3);
-        }
-      }
+      const nx = t.z * side, nz = -t.x * side;
+      chain.push({ x: p.x + nx * INSET, z: p.z + nz * INSET, nx, nz });
     }
 
-    const g = new THREE.BufferGeometry();
-    g.setIndex(idxArr);
-    g.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(colArr, 3));
-    g.computeVertexNormals();
-    trackGroup.add(new THREE.Mesh(g, railMat));
+    // ── 墙体：每点 4 个顶点（内下 / 内上 / 外上 / 外下），相邻点成三段四边面
+    const pos = [], idx = [];
+    for (const s of chain){
+      pos.push(s.x, 0, s.z);
+      pos.push(s.x, WALL_H, s.z);
+      pos.push(s.x + s.nx * WALL_T, WALL_H, s.z + s.nz * WALL_T);
+      pos.push(s.x + s.nx * WALL_T, 0, s.z + s.nz * WALL_T);
+    }
+    for (let i = 0; i < nSeg; i++){
+      const a = i * 4, b = ((i + 1) % N_SAMPLES) * 4;
+      idx.push(a, a + 1, b + 1,  a, b + 1, b);        // 内侧面（贴赛道）
+      idx.push(a + 1, a + 2, b + 2,  a + 1, b + 2, b + 1); // 顶面
+      idx.push(a + 2, a + 3, b + 3,  a + 2, b + 3, b + 2); // 外侧面
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    wg.setIndex(idx);
+    wg.computeVertexNormals();
+    const wall = new THREE.Mesh(wg, wallMat);
+    wall.receiveShadow = true;
+    trackGroup.add(wall);
 
-    const gp = new THREE.BufferGeometry();
-    gp.setIndex(idxP);
-    gp.setAttribute('position', new THREE.Float32BufferAttribute(posP, 3));
-    gp.setAttribute('color', new THREE.Float32BufferAttribute(colP, 3));
-    gp.computeVertexNormals();
-    trackGroup.add(new THREE.Mesh(gp, postMat));
+    // ── 顶部红漆带：贴在内侧顶棱，给护栏一个明确的赛道识别色
+    const cpos = [], cidx = [];
+    for (const s of chain){
+      cpos.push(s.x - s.nx * 0.004, WALL_H + 0.010, s.z - s.nz * 0.004);
+      cpos.push(s.x + s.nx * 0.070, WALL_H + 0.010, s.z + s.nz * 0.070);
+    }
+    for (let i = 0; i < nSeg; i++){
+      const a = i * 2, b = ((i + 1) % N_SAMPLES) * 2;
+      cidx.push(a, a + 1, b + 1,  a, b + 1, b);
+    }
+    const cg = new THREE.BufferGeometry();
+    cg.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3));
+    cg.setIndex(cidx);
+    cg.computeVertexNormals();
+    trackGroup.add(new THREE.Mesh(cg, capMat));
+
+    // ── 立柱：每 6 个采样点一根，比墙略高，节奏感 + 视觉厚度
+    const step = 6;
+    const list = [];
+    for (let i = 0; i < N_SAMPLES; i += step){
+      const s = chain[i];
+      list.push({ x: s.x + s.nx * WALL_T * 0.5, z: s.z + s.nz * WALL_T * 0.5, ry: Math.atan2(s.nx, s.nz) });
+    }
+    const postH = WALL_H + 0.10;
+    const pg = new THREE.BoxGeometry(WALL_T + 0.07, postH, WALL_T * 1.6);
+    const im = new THREE.InstancedMesh(pg, postMat, list.length);
+    const dm = new THREE.Object3D();
+    list.forEach((o, i) => {
+      dm.position.set(o.x, postH / 2, o.z);
+      dm.rotation.set(0, o.ry, 0);
+      dm.updateMatrix();
+      im.setMatrixAt(i, dm.matrix);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    im.castShadow = true;
+    trackGroup.add(im);
   }
 }
 // 起终点线：黑白格（单网格顶点色，替代纯白条）
@@ -1093,37 +1149,53 @@ if (!trackOpen){
 }
 // 起跑门架：双立柱 + 黑白格横幅（几何拼格，不用贴图）
 {
-  const p = S[0], t = T[0], sx = t.z, sz = -t.x;
-  const poleGeo = new THREE.BoxGeometry(0.25, 7.2, 0.25);
-  const poleMat = new THREE.MeshLambertMaterial({ color: 0x30343b });
+  const p = S[0], t = T[0];
+  const yawB = Math.atan2(t.x, t.z);          // 横幅朝向 = 赛道切线方向
+  const rx = Math.cos(yawB), rz = -Math.sin(yawB);   // 横幅水平延伸方向（沿路宽）
+  const nx = Math.sin(yawB), nz = Math.cos(yawB);    // 横幅法线（朝车来的方向）
+  const bannerW = (hw + 1.4) * 2;
+  const bannerY = 8.2;                        // 抬高到 8.2m：追尾机位下不再糊满一条横杠
+
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a424d, metalness: 0.7, roughness: 0.35 });
   for (const side of [1, -1]){
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.set(p.x + sx * (hw + 1.6) * side, 3.6, p.z + sz * (hw + 1.6) * side);
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.28, bannerY + 0.6, 0.28), poleMat);
+    pole.position.set(p.x + rx * (hw + 1.4) * side, (bannerY + 0.6) / 2, p.z + rz * (hw + 1.4) * side);
     pole.castShadow = true;
     trackGroup.add(pole);
   }
-  // 横幅骨架
-  const bannerW = (hw + 1.6) * 2;
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(bannerW, 1.0, 0.12),
-    new THREE.MeshLambertMaterial({ color: 0x1c2127 }));
-  frame.position.set(p.x, 6.7, p.z);
-  frame.rotation.y = Math.atan2(t.x, t.z);
+
+  // 桁架：细长横梁 + 上下彩色饰条，不再是一整块实心黑盒
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0x4a525d, metalness: 0.75, roughness: 0.32 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.3, roughness: 0.35, emissive: 0x1b5e8a, emissiveIntensity: 0.9 });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(bannerW, 0.55, 0.1), steelMat);
+  frame.position.set(p.x, bannerY, p.z);
+  frame.rotation.y = yawB;
   trackGroup.add(frame);
-  // 黑白格：两行 12 列
+  for (const dy of [0.31, -0.31]){
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(bannerW, 0.08, 0.14), accentMat);
+    bar.position.set(p.x, bannerY + dy, p.z);
+    bar.rotation.y = yawB;
+    trackGroup.add(bar);
+  }
+
+  // 黑白格：两行 12 列，正反两面各贴一层（两面都能看到格子）
   const cellW = bannerW / 12;
-  const cellGeo = new THREE.BoxGeometry(cellW, 0.4, 0.04);
+  const cellGeo = new THREE.BoxGeometry(cellW, 0.26, 0.03);
   const black = new THREE.MeshBasicMaterial({ color: 0x0d1116 });
   const white = new THREE.MeshBasicMaterial({ color: 0xf2f5f8 });
-  const cosY = Math.cos(frame.rotation.y), sinY = Math.sin(frame.rotation.y);
-  for (let row = 0; row < 2; row++){
-    for (let col = 0; col < 12; col++){
-      const lx = -bannerW / 2 + cellW * (col + 0.5);
-      const cell = new THREE.Mesh(cellGeo, (row + col) % 2 ? black : white);
-      cell.position.set(
-        p.x + lx * cosY, 6.7 + (row - 0.5) * 0.42, p.z - lx * sinY + 0.08
-      );
-      cell.rotation.y = frame.rotation.y;
-      trackGroup.add(cell);
+  for (const side of [1, -1]){
+    for (let row = 0; row < 2; row++){
+      for (let col = 0; col < 12; col++){
+        const lx = -bannerW / 2 + cellW * (col + 0.5);
+        const cell = new THREE.Mesh(cellGeo, (row + col) % 2 ? black : white);
+        cell.position.set(
+          p.x + rx * lx + nx * 0.07 * side,
+          bannerY + (row - 0.5) * 0.28,
+          p.z + rz * lx + nz * 0.07 * side
+        );
+        cell.rotation.y = yawB;
+        trackGroup.add(cell);
+      }
     }
   }
 }
@@ -1131,9 +1203,30 @@ if (!trackOpen){
 buildTrackAll();
 
 // 地面
+// 地面：程序化草地贴图（纯色草地上百平米一片死板，加噪声后近处有细节、远处被雾吃掉落差）
+const grassTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#4d8a4f';
+  g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 2600; i++){
+    const v = Math.random();
+    g.fillStyle = v > 0.6 ? 'rgba(120,170,110,0.35)'
+               : v > 0.3 ? 'rgba(40,90,50,0.35)'
+                         : 'rgba(90,140,80,0.3)';
+    g.fillRect(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 3, 1.5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(180, 180);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();   // 此处 maxAniso 尚未定义，直接取能力值
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(1600, 1600),
-  new THREE.MeshLambertMaterial({ color: 0x4d8a4f })
+  new THREE.MeshLambertMaterial({ map: grassTex, color: 0xffffff })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -1150,7 +1243,7 @@ function clearDecor(){
   }
 }
 function addInstanced(geo, items, opts = {}){
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: !!opts.flatShading });
   const im = new THREE.InstancedMesh(geo, mat, items.length);
   const d = new THREE.Object3D();
   const c = new THREE.Color();
@@ -1220,9 +1313,31 @@ function buildDecor(){
       if (Math.hypot(mx - S[k].x, mz - S[k].z) < Math.max(sx, sz) * 1.15 + 40){ tooClose = true; break; }
     }
     if (tooClose) continue;
-    items.push({ x: mx, y: h / 2 - 4, z: mz, sx, sy: h, sz, c: col });
+    // 每个山随机绕 Y 轴转一下：同一个几何体也能看起来形态各异
+    items.push({ x: mx, y: h / 2 - 4, z: mz, sx, sy: h, sz, ry: rnd() * Math.PI * 2, c: col });
   }
-  addInstanced(new THREE.ConeGeometry(1, 1, 5), items);
+  // 山体：9 边形 + 3 段高度，顶点做径向扰动。
+  // 原来是 5 边锥体，远看就是一排标准金字塔，非常出戏。
+  const mGeo = (() => {
+    const g = new THREE.ConeGeometry(1, 1, 9, 3);
+    const pos = g.attributes.position;
+    let s = 2027;
+    const nr = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < pos.count; i++){
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const rr = Math.hypot(x, z);
+      if (rr > 1e-4){
+        // 越靠山顶扰动越小，保证峰顶仍然收尖
+        const k = 1 + (nr() - 0.5) * 0.45 * (1 - (y + 0.5));
+        pos.setX(i, x * k);
+        pos.setZ(i, z * k);
+        pos.setY(i, y + (nr() - 0.5) * 0.07);
+      }
+    }
+    g.computeVertexNormals();
+    return g;
+  })();
+  addInstanced(mGeo, items, { flatShading: true });
 }
 
 // 广告牌 + 支柱 + 轮胎堆
@@ -1292,6 +1407,38 @@ function buildDecor(){
 }
 buildDecor();
 
+/* ============ 通用柔光贴图（车底接触阴影 / 轮胎烟 / 喷射光晕共用） ============ */
+// 车底接触阴影：径向渐变（比 shadowMap 更"贴地"，成本几乎为零）
+const contactShadowTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(0,0,0,0.62)');
+  grd.addColorStop(0.45, 'rgba(0,0,0,0.34)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
+// 柔边圆点：烟雾粒子与喷射光晕共用
+const softDotTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grd.addColorStop(0.45, 'rgba(255,255,255,0.42)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
+
 /* ============ 漂移轮胎印（环形缓冲条带，直接铺在路面上） ============ */
 const SKID_MAX = 1600;                       // 最多保留 1600 段
 const skidPos = new Float32Array(SKID_MAX * 4 * 3);
@@ -1334,7 +1481,177 @@ function clearSkid(){
   skidGeo.setDrawRange(0, 0);
 }
 
+/* ============ 漂移轮胎烟（GPU 粒子池） ============
+ * 用 Points + 自定义 shader：每个粒子带独立生命值，可取不同大小与透明度。
+ * 单一 draw call，池化复用，不产生 GC 抖动。 */
+const SMOKE_MAX = 220;
+const smokePos = new Float32Array(SMOKE_MAX * 3);
+const smokeVel = new Float32Array(SMOKE_MAX * 3);
+const smokeLife = new Float32Array(SMOKE_MAX);
+const smokeGeo = new THREE.BufferGeometry();
+smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePos, 3).setUsage(THREE.DynamicDrawUsage));
+smokeGeo.setAttribute('aLife', new THREE.BufferAttribute(smokeLife, 1).setUsage(THREE.DynamicDrawUsage));
+const smokeMat = new THREE.ShaderMaterial({
+  uniforms: { uTex: { value: softDotTex } },
+  vertexShader: [
+    'attribute float aLife;',
+    'varying float vLife;',
+    'void main(){',
+    '  vLife = aLife;',
+    '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+    '  // 世界尺寸 ≈0.35~1.25m：随生命递减而膨胀，屏幕上按距离衰减',
+    '  gl_PointSize = (640.0 / max(1.0, -mv.z)) * (0.35 + (1.0 - aLife) * 1.0);',
+    '  gl_Position = projectionMatrix * mv;',
+    '}'
+  ].join('\n'),
+  fragmentShader: [
+    'uniform sampler2D uTex;',
+    'varying float vLife;',
+    'void main(){',
+    '  if (vLife <= 0.0) discard;',
+    '  vec4 t = texture2D(uTex, gl_PointCoord);',
+    '  gl_FragColor = vec4(0.82, 0.84, 0.87, t.a * vLife * 0.5);',
+    '}'
+  ].join('\n'),
+  transparent: true, depthWrite: false
+});
+const smokePoints = new THREE.Points(smokeGeo, smokeMat);
+smokePoints.frustumCulled = false;
+smokePoints.renderOrder = 2;
+scene.add(smokePoints);
+let smokeHead = 0;
+const smokePosAttr = smokeGeo.attributes.position;
+const smokeLifeAttr = smokeGeo.attributes.aLife;
+
+function emitSmoke(x, y, z, vx, vz){
+  const i = smokeHead; smokeHead = (smokeHead + 1) % SMOKE_MAX;
+  smokePos[i * 3] = x; smokePos[i * 3 + 1] = y; smokePos[i * 3 + 2] = z;
+  smokeVel[i * 3] = vx * 0.12 + (Math.random() - 0.5) * 1.2;
+  smokeVel[i * 3 + 1] = 0.6 + Math.random() * 0.9;
+  smokeVel[i * 3 + 2] = vz * 0.12 + (Math.random() - 0.5) * 1.2;
+  smokeLife[i] = 1.0;
+}
+function updateSmoke(dt){
+  let alive = false;
+  for (let i = 0; i < SMOKE_MAX; i++){
+    if (smokeLife[i] <= 0) continue;
+    alive = true;
+    smokeLife[i] = Math.max(0, smokeLife[i] - dt * 1.35);
+    const b = i * 3;
+    smokePos[b]     += smokeVel[b] * dt;
+    smokePos[b + 1] += smokeVel[b + 1] * dt;
+    smokePos[b + 2] += smokeVel[b + 2] * dt;
+    smokeVel[b] *= 0.97; smokeVel[b + 2] *= 0.97;   // 横向迅速散开
+    smokeVel[b + 1] *= 0.985;
+  }
+  if (alive){
+    smokePosAttr.needsUpdate = true;
+    smokeLifeAttr.needsUpdate = true;
+  }
+}
+function clearSmoke(){
+  for (let i = 0; i < SMOKE_MAX; i++) smokeLife[i] = 0;
+  smokeLifeAttr.needsUpdate = true;
+}
+
+/* ============ 喷射尾焰粒子（氮气 / 极限突破 / 完美漂移共用池） ============
+ * 加法混合 + 每粒独立颜色，喷口后方拖出真实尾焰；单 draw call，池化无 GC。 */
+const FLAME_MAX = 260;
+const flamePos = new Float32Array(FLAME_MAX * 3);
+const flameVel = new Float32Array(FLAME_MAX * 3);
+const flameLife = new Float32Array(FLAME_MAX);
+const flameCol = new Float32Array(FLAME_MAX * 3);
+const flameGeo = new THREE.BufferGeometry();
+flameGeo.setAttribute('position', new THREE.BufferAttribute(flamePos, 3).setUsage(THREE.DynamicDrawUsage));
+flameGeo.setAttribute('aLife', new THREE.BufferAttribute(flameLife, 1).setUsage(THREE.DynamicDrawUsage));
+flameGeo.setAttribute('aColor', new THREE.BufferAttribute(flameCol, 3).setUsage(THREE.DynamicDrawUsage));
+const flameMat = new THREE.ShaderMaterial({
+  uniforms: { uTex: { value: softDotTex } },
+  vertexShader: [
+    'attribute float aLife;',
+    'attribute vec3 aColor;',
+    'varying float vLife;',
+    'varying vec3 vCol;',
+    'void main(){',
+    '  vLife = aLife; vCol = aColor;',
+    '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+    '  gl_PointSize = (520.0 / max(1.0, -mv.z)) * (0.12 + aLife * 0.55);',
+    '  gl_Position = projectionMatrix * mv;',
+    '}'
+  ].join('\n'),
+  fragmentShader: [
+    'uniform sampler2D uTex;',
+    'varying float vLife;',
+    'varying vec3 vCol;',
+    'void main(){',
+    '  if (vLife <= 0.0) discard;',
+    '  float a = texture2D(uTex, gl_PointCoord).a * vLife;',
+    '  gl_FragColor = vec4(vCol * (0.6 + vLife * 0.8), a);',
+    '}'
+  ].join('\n'),
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+});
+const flamePoints = new THREE.Points(flameGeo, flameMat);
+flamePoints.frustumCulled = false;
+flamePoints.renderOrder = 3;
+scene.add(flamePoints);
+let flameHead = 0;
+const flamePosAttr = flameGeo.attributes.position;
+const flameLifeAttr = flameGeo.attributes.aLife;
+const flameColAttr = flameGeo.attributes.aColor;
+
+function emitFlame(x, y, z, fx, fz, cr, cg, cb, power){
+  const i = flameHead; flameHead = (flameHead + 1) % FLAME_MAX;
+  const b = i * 3;
+  flamePos[b] = x; flamePos[b + 1] = y; flamePos[b + 2] = z;
+  // 向后喷：速度与车头方向相反，越快喷得越远
+  const back = 7 + Math.random() * 7;
+  flameVel[b]     = -fx * back + (Math.random() - 0.5) * 2.4;
+  flameVel[b + 1] = (Math.random() - 0.5) * 1.2;
+  flameVel[b + 2] = -fz * back + (Math.random() - 0.5) * 2.4;
+  flameLife[i] = 0.55 + Math.random() * 0.45;
+  flameCol[b] = cr * power; flameCol[b + 1] = cg * power; flameCol[b + 2] = cb * power;
+}
+function updateFlame(dt){
+  let alive = false;
+  for (let i = 0; i < FLAME_MAX; i++){
+    if (flameLife[i] <= 0) continue;
+    alive = true;
+    flameLife[i] = Math.max(0, flameLife[i] - dt * 3.0);
+    const b = i * 3;
+    flamePos[b]     += flameVel[b] * dt;
+    flamePos[b + 1] += flameVel[b + 1] * dt;
+    flamePos[b + 2] += flameVel[b + 2] * dt;
+    flameVel[b] *= 0.90; flameVel[b + 2] *= 0.90;
+    flameVel[b + 1] = flameVel[b + 1] * 0.92 + 0.5 * dt;   // 尾焰略微上浮
+  }
+  if (alive){
+    flamePosAttr.needsUpdate = true;
+    flameLifeAttr.needsUpdate = true;
+    flameColAttr.needsUpdate = true;
+  }
+}
+function clearFlame(){
+  for (let i = 0; i < FLAME_MAX; i++) flameLife[i] = 0;
+  flameLifeAttr.needsUpdate = true;
+}
+
 /* ============ 车辆工厂：程序化低多边形跑车（玩家与 AI 共用） ============ */
+/* 轮廓平滑：把 8~10 个折线控制点重采样成连续曲线。
+ * 原理：Catmull-Rom 样条保证曲线穿过每一个控制点（形状还是设计的样子），
+ *      用 centripetal 参数化能避免尖角处"鼓包"——换成 uniform 的话车头会被甩出去一块。
+ * 为什么值得做：低模车像纸盒的根本原因是"侧视轮廓是折线"，
+ *      轮廓一顺，即使多边形数量不变，观感也会从方块变成流线。 */
+function smoothProfile(pts, samples){
+  const v = pts.map(p => new THREE.Vector3(p[0], p[1], 0));
+  const curve = new THREE.CatmullRomCurve3(v, false, 'centripetal', 0.5);
+  const out = [];
+  for (let i = 0; i <= samples; i++){
+    const p = curve.getPoint(i / samples);
+    out.push([p.x, p.y]);
+  }
+  return out;
+}
 // 侧视轮廓挤出成型（x=车长, y=高度 → 沿车宽方向挤出）
 function extrudeProfile(pts, width){
   const shape = new THREE.Shape();
@@ -1343,7 +1660,7 @@ function extrudeProfile(pts, width){
   shape.closePath();
   const g = new THREE.ExtrudeGeometry(shape, {
     depth: width, bevelEnabled: true,
-    bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2
+    bevelThickness: 0.06, bevelSize: 0.07, bevelSegments: 3
   });
   g.translate(0, 0, -width / 2);
   g.rotateY(-Math.PI / 2); // 车头朝 +z
@@ -1366,10 +1683,12 @@ const CAR_TYPES = {
   mini: {
     name: '五菱宏光 MINI EV', short: 'MINI', cls: 'C', paint: 0x8fd6b4, hasEvBar: true, maxSpeed: 83.3, accel: 22, topKmh: 300,
     passive: { name: '市区之光', desc: '低速段加速 +60%', mods: { lowAccel: 1.6 } },
-    len: 2.92, width: 1.49, cabinWidth: 1.53, height: 1.62,
+    len: 2.92, width: 1.49, cabinWidth: 1.53, height: 1.62, smooth: false,
     body: [[-1.42,0.24],[-1.46,0.95],[-1.36,1.42],[-0.95,1.52],[0.55,1.52],[1.05,1.42],[1.32,1.05],[1.46,0.55],[1.3,0.24],[-1.3,0.24]],
     cabin: [[-1.25,1.0],[-1.18,1.46],[0.62,1.46],[1.06,1.02]],
-    wheelR: 0.26, wheelW: 0.18, wheelX: 0.62, wheelZF: 0.97, wheelZR: 0.97,
+    // wheelX 原为 0.62：轮外沿 0.62+0.09=0.71 < 车身半宽 0.745，四个轮子整个藏在车身里
+    // 0.73 → 外沿 0.82，比车身宽 7cm，视觉上相当于加了轮眉，轮子才看得见
+    wheelR: 0.26, wheelW: 0.18, wheelX: 0.73, wheelZF: 0.97, wheelZR: 0.97,
     wing: { w: 1.2, h: 0.04, d: 0.12, y: 1.53, z: -1.36, postH: 0.04 },
     lightF: [0.72, 1.4], lightR: [0.95, -1.43], exhaust: null,
     scoop: null, splitter: false, roofRack: false, sideSteps: false
@@ -1568,6 +1887,8 @@ const treadTex = (() => {
   return tex;
 })();
 
+// 车底接触阴影 / 烟雾柔光贴图已在文件前部（漂移轮胎印之前）统一定义，此处不再重复
+
 // 条纹对比色：亮漆配深纹，深漆配白纹
 function stripeColorFor(color){
   const c = new THREE.Color(color);
@@ -1587,13 +1908,15 @@ const carGeosCache = {};
 function getCarGeos(key){
   if (carGeosCache[key]) return carGeosCache[key];
   const t = CAR_TYPES[key];
-  const tire = new THREE.CylinderGeometry(t.wheelR, t.wheelR, t.wheelW, 14);
+  const tire = new THREE.CylinderGeometry(t.wheelR, t.wheelR, t.wheelW, 18);
   tire.rotateZ(Math.PI / 2);
   const rim = new THREE.CylinderGeometry(t.wheelR * 0.58, t.wheelR * 0.58, t.wheelW * 1.02, 10);
   rim.rotateZ(Math.PI / 2);
   const g = {
-    body: extrudeProfile(t.body, t.width),
-    cabin: extrudeProfile(t.cabin, t.cabinWidth),
+    // 轮廓先做样条重采样再挤出：车身 26 段、座舱 16 段
+    // t.smooth === false 的车型（方正两厢车）保留原始折线，抹圆了反而不像
+    body: extrudeProfile(t.smooth === false ? t.body : smoothProfile(t.body, t.profileSeg || 26), t.width),
+    cabin: extrudeProfile(t.smooth === false ? t.cabin : smoothProfile(t.cabin, t.cabinSeg || 16), t.cabinWidth),
     wing: new THREE.BoxGeometry(t.wing.w, t.wing.h, t.wing.d),
     post: new THREE.BoxGeometry(0.08, Math.max(0.06, t.wing.postH), 0.1),
     splitter: new THREE.BoxGeometry(t.width * 0.9, 0.06, 0.45),
@@ -1643,20 +1966,46 @@ function buildCarMeshes(g, color, num, key){
   // ExtrudeGeometry 材质分组：0 = 前后端盖（车身侧面轮廓），1 = 侧壁（引擎盖/车顶/车尾）
   const stripe = (CAR_TYPES[key].cls === 'S') ? '#ffd166' : stripeColorFor(color);
   const liveryTex = getLivery(color, num, key, stripe);
-  const paintCap  = new THREE.MeshPhongMaterial({ map: liveryTex, shininess: 95, specular: 0x555555 });
-  const paintSide = new THREE.MeshPhongMaterial({ color, shininess: 95, specular: 0x555555 });
-  const dark  = new THREE.MeshPhongMaterial({ color: 0x11161d, shininess: 160, specular: 0x8fa7bd });
-  const tireMat = new THREE.MeshLambertMaterial({ map: treadTex });
-  const rimMat  = new THREE.MeshPhongMaterial({ color: 0xb8bec8, shininess: 100 });
-  const goldRimMat = new THREE.MeshPhongMaterial({ color: 0xd9b45a, shininess: 130, specular: 0xffffff });
-  const calMat = new THREE.MeshPhongMaterial({ color: 0xc0392b, shininess: 60 });
-  const carbonMat = new THREE.MeshPhongMaterial({ map: carbonTex, shininess: 60, specular: 0x333333 });
+  // 车漆：金属基色 + 清漆层（clearcoat）。真实车漆就是"金属漆 + 透明清漆"两层，
+  // 之前纯 MeshStandard 的高 metalness 会让车身整体变成镜子，观感很怪。
+  const paintCap = new THREE.MeshPhysicalMaterial({
+    map: liveryTex, metalness: 0.35, roughness: 0.38,
+    clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 0.9
+  });
+  const paintSide = new THREE.MeshPhysicalMaterial({
+    color, metalness: 0.35, roughness: 0.38,
+    clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 0.9
+  });
+  const dark  = new THREE.MeshStandardMaterial({ color: 0x11161d, metalness: 0.1, roughness: 0.8 });
+  // 轮胎：高粗糙度橡胶 + 胎纹贴图
+  const tireMat = new THREE.MeshStandardMaterial({ map: treadTex, roughness: 0.92, metalness: 0.0, color: 0x1a1e24 });
+  const rimMat  = new THREE.MeshStandardMaterial({ color: 0xb8bec8, metalness: 0.95, roughness: 0.15 });
+  const goldRimMat = new THREE.MeshStandardMaterial({ color: 0xd9b45a, metalness: 0.95, roughness: 0.1 });
+  const calMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, metalness: 0.4, roughness: 0.5 });
+  const carbonMat = new THREE.MeshStandardMaterial({ map: carbonTex, metalness: 0.1, roughness: 0.4 });
+  // 座舱玻璃：直接用深色高光泽清漆材质渲染整个座舱（低成本模拟染色玻璃）
+  // envMapIntensity 不宜过高：0.06 粗糙度 + 强环境反射会让座舱发白，看着像一块浅色塑料
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0x070b10, metalness: 0.0, roughness: 0.34,
+    clearcoat: 0.45, clearcoatRoughness: 0.3, envMapIntensity: 0.5
+  });
 
   const body = new THREE.Mesh(geos.body, [paintCap, paintSide]);
   body.castShadow = true;
-  const cabin = new THREE.Mesh(geos.cabin, dark);
+  const cabin = new THREE.Mesh(geos.cabin, glassMat);
   cabin.castShadow = true;
   g.add(body, cabin);
+
+  // 车底接触阴影：预先把平面转到 XZ 面，再交给外部按"位置 + 航向"驱动。
+  // 不挂在车身组里：车身有侧倾/俯仰，挂进去会导致阴影随车身倾斜插进路面。
+  const contactGeo = new THREE.PlaneGeometry(t.width * 1.75, t.len * 1.12);
+  contactGeo.rotateX(-Math.PI / 2);
+  const contact = new THREE.Mesh(contactGeo, new THREE.MeshBasicMaterial({
+    map: contactShadowTex, transparent: true, opacity: 0.8,
+    depthWrite: false, color: 0x000000
+  }));
+  contact.renderOrder = -1;
+  contact.position.y = 0.02;
 
   // 侧裙 + 后视镜 + 进气格栅 + 车牌
   for (const sx of [-1, 1]){
@@ -1675,7 +2024,7 @@ function buildCarMeshes(g, color, num, key){
   g.add(plate);
 
   // 镀铬腰线 + 门把手
-  const chromeMat = new THREE.MeshPhongMaterial({ color: 0xb9c2cc, shininess: 140, specular: 0xffffff });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xb9c2cc, metalness: 0.95, roughness: 0.08 });
   for (const sx of [-1, 1]){
     const belt = new THREE.Mesh(geos.belt, chromeMat);
     belt.position.set(sx * (t.cabinWidth / 2 + 0.015), t.height * 0.6, t.len * 0.02);
@@ -1750,18 +2099,27 @@ function buildCarMeshes(g, color, num, key){
   // 大灯 / 尾灯 / 排气
   const headMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
   const tailMat = new THREE.MeshBasicMaterial({ color: 0xb82020 });
+  const tailGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xff3030, transparent: true, opacity: 0.32,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
   if (t.hasEvBar){
+    // 贯穿式前灯带（电车特征）
     const bar = new THREE.Mesh(geos.evBar, headMat);
     bar.position.set(0, t.lightF[0] + 0.02, t.lightF[1] + 0.02);
     g.add(bar);
   }
+  // 尾部贯穿灯带：追尾机位下这是车尾最主要的视觉元素。
+  // 原代码判断写成 t.evBar（CAR_TYPES 里从未定义该字段），导致这条灯带从未被渲染。
+  const rearBar = new THREE.Mesh(geos.rearBar, tailMat);
+  rearBar.position.set(0, t.lightR[0] + 0.05, -t.len / 2 - 0.015);
+  g.add(rearBar);
+  const rearHalo = new THREE.Mesh(geos.rearBar, tailGlowMat);
+  rearHalo.scale.set(1.04, 1.7, 1);   // 只做一层薄薄的辉光，太厚会糊成一条红带
+  rearHalo.position.set(0, t.lightR[0] + 0.05, -t.len / 2 - 0.03);
+  g.add(rearHalo);
   for (const px of [-0.55, 0.55]){
-    if (t.evBar){
-    const rb = new THREE.Mesh(geos.rearBar, tailMat);
-    rb.position.set(0, t.lightR[0] + 0.06, -t.len / 2 - 0.02);
-    g.add(rb);
-  }
-  if (t.roundLights){
+    if (t.roundLights){
       const rl = new THREE.Mesh(geos.roundLamp, dark);
       rl.position.set(px * 0.86, t.lightF[0], t.lightF[1] - 0.01);
       g.add(rl);
@@ -1809,40 +2167,64 @@ function buildCarMeshes(g, color, num, key){
     }
   }
 
-  // 排气火焰
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffa020, transparent: true, opacity: 0.85 });
+  // 排气火焰：Three 里纯透明锥体在加法混合下才有"发光"感（普通混合会显得像塑料片）
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xffa020, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
   const glow = new THREE.Group();
   const exPos = t.exhaust || [0.3, t.len / 2 * -0.92]; // 纯电车无排气口时火焰贴在尾部
   for (const px of [-0.21, 0.21]){
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.55, 8), glowMat);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.62, 8), glowMat);
     flame.rotation.x = -Math.PI / 2;
-    flame.position.set(px, exPos[0], exPos[1] - 0.28);
+    flame.position.set(px, exPos[0], exPos[1] - 0.30);
     glow.add(flame);
   }
   glow.visible = false;
   g.add(glow);
 
-  // 氮气喷射（蓝色，比漂移火焰更长）
-  const nitroMat = new THREE.MeshBasicMaterial({ color: 0x7fd8ff, transparent: true, opacity: 0.9 });
+  // 氮气喷射（青蓝色，比漂移火焰更长）
+  const nitroMat = new THREE.MeshBasicMaterial({
+    color: 0x7fd8ff, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
   const nitroGlow = new THREE.Group();
   for (const px of [-0.2, 0.2]){
-    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.9, 8), nitroMat);
+    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.11, 1.05, 8), nitroMat);
     jet.rotation.x = -Math.PI / 2;
-    jet.position.set(px, exPos[0], exPos[1] - 0.5);
+    jet.position.set(px, exPos[0], exPos[1] - 0.58);
     nitroGlow.add(jet);
   }
+  // 喷射口光晕：加法混合的 Sprite，模拟 bloom 的扩散感（比后处理便宜得多）
+  const jetHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: softDotTex, color: 0x7fd8ff, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 1.0
+  }));
+  jetHalo.scale.set(1.9, 1.9, 1);
+  jetHalo.position.set(0, exPos[0], exPos[1] - 0.4);
+  nitroGlow.add(jetHalo);
   nitroGlow.visible = false;
   g.add(nitroGlow);
 
   // 极限突破喷射（紫白，最长最亮）
-  const overMat = new THREE.MeshBasicMaterial({ color: 0xd8b4fe, transparent: true, opacity: 0.95 });
+  const overMat = new THREE.MeshBasicMaterial({
+    color: 0xd8b4fe, transparent: true, opacity: 1.0,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
   const overGlow = new THREE.Group();
   for (const px of [-0.22, 0.22]){
-    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.11, 1.5, 8), overMat);
+    const jet = new THREE.Mesh(new THREE.ConeGeometry(0.14, 1.8, 8), overMat);
     jet.rotation.x = -Math.PI / 2;
-    jet.position.set(px, exPos[0], exPos[1] - 0.85);
+    jet.position.set(px, exPos[0], exPos[1] - 1.0);
     overGlow.add(jet);
   }
+  const overHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: softDotTex, color: 0xd8b4fe, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 1.0
+  }));
+  overHalo.scale.set(2.8, 2.8, 1);
+  overHalo.position.set(0, exPos[0], exPos[1] - 0.85);
+  overGlow.add(overHalo);
   overGlow.visible = false;
   g.add(overGlow);
 
@@ -1855,7 +2237,7 @@ function buildCarMeshes(g, color, num, key){
     tire.castShadow = true;
     const rim = new THREE.Mesh(geos.rim, rimMat);
     const hub = new THREE.Mesh(geos.hub, rimMat);
-    const disc = new THREE.Mesh(geos.disc, new THREE.MeshPhongMaterial({ color: 0x3a3f45, shininess: 30 }));
+    const disc = new THREE.Mesh(geos.disc, new THREE.MeshStandardMaterial({ color: 0x3a3f45, metalness: 0.6, roughness: 0.5 }));
     w.add(tire, rim, hub, disc);
     // 五辐条
     for (let s = 0; s < 5; s++){
@@ -1900,13 +2282,29 @@ function buildCarMeshes(g, color, num, key){
     cal.position.set(wx * 1.02, t.wheelR + 0.06, wz + (wz > 0 ? -0.06 : 0.06));
     g.add(cal);
   }
-  return { wheels, glow, nitroGlow, overGlow, tailMat };
+
+  /* ── 车壳 / 车轮解耦 ──
+   * 真实车辆是"车身挂在悬挂上，四个轮子始终贴地"。
+   * 之前所有零件和轮子平铺在同一个 group 里，只要一倾斜就是整车连轮子一起歪，
+   * 轮子跟着离地/穿地，观感就是一只被摇来摇去的铁盒子。
+   * 这里把除轮子外的零件收进 chassis 子组，之后侧倾/俯仰/悬挂只作用于 chassis。 */
+  const wheelSet = new Set(wheels);
+  const chassis = new THREE.Group();
+  chassis.rotation.order = 'YXZ';   // 先俯仰后侧倾，避免两者在大角度下互相串轴
+  for (const child of [...g.children]) if (!wheelSet.has(child)) chassis.add(child);
+  g.add(chassis);
+
+  return { wheels, glow, nitroGlow, overGlow, tailMat, contact, chassis };
 }
 function createRacerMesh(color, num, key){
   const g = new THREE.Group();
   const built = buildCarMeshes(g, color, num, key);
   scene.add(g);
-  return { group: g, wheels: built.wheels, glow: built.glow, nitroGlow: built.nitroGlow, overGlow: built.overGlow, tailMat: built.tailMat };
+  scene.add(built.contact);   // 接触阴影独立贴地，不随车身侧倾/俯仰
+  return {
+    group: g, wheels: built.wheels, glow: built.glow, nitroGlow: built.nitroGlow,
+    overGlow: built.overGlow, tailMat: built.tailMat, contact: built.contact, chassis: built.chassis
+  };
 }
 // 按车型更新碰撞尺寸/相机距离（车越大，碰撞圆越大、相机略后退）
 function applyCarDims(r, key){
@@ -1914,19 +2312,45 @@ function applyCarDims(r, key){
   r.carType = key;
   r.colR = t.width * 0.6;
   r.colOff = t.len * 0.25;
-  r.camDist = 15.5 + (t.len - 4.4) * 0.9;
+  r.camDist = 12.0 + (t.len - 4.4) * 0.8;   // 追尾距离：原来 15.5m，车在画面里偏小、姿态看不清
   r.sk = skOf(key);   // 被动技能参数（换车时同步刷新）
+}
+
+/* ============ 远景代理（真正的距离 LOD） ============
+ * 之前用 THREE.LOD 包了三层，但对象从未挂进场景 —— 等于死代码，只占显存。
+ * 现在改成"可见性切换"：AI 车超过 90m 时隐藏整套细节 Mesh（约 30 个 draw call），
+ * 只渲染一个 5 面体 + 4 个低面轮子。远处车在屏幕上不到 40 像素，肉眼看不出差别。 */
+const FAR_DIST = 90, NEAR_DIST = 78;   // 双阈值滞回，避免在边界反复切换造成闪烁
+function buildFarProxy(t, color){
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: t.paint, metalness: 0.3, roughness: 0.5 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(t.width * 0.92, t.height * 0.62, t.len * 0.9), bodyMat);
+  body.position.y = t.height * 0.42;
+  g.add(body);
+  const wheelGeo = new THREE.CylinderGeometry(t.wheelR * 0.9, t.wheelR * 0.9, t.wheelW * 0.7, 6);
+  wheelGeo.rotateZ(Math.PI / 2);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1e24, roughness: 0.95 });
+  for (const [x, z] of [[-t.wheelX, t.wheelZF], [t.wheelX, t.wheelZF], [-t.wheelX, t.wheelZR], [t.wheelX, t.wheelZR]]){
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.position.set(x, t.wheelR, z);
+    g.add(w);
+  }
+  return g;
 }
 // 玩家换车型时原地重建车身（保留 group 变换）
 function rebuildPlayerModel(){
   const kids = [...player.group.children];
   for (const k of kids) player.group.remove(k);
+  if (player.contact){ scene.remove(player.contact); player.contact.geometry.dispose(); player.contact.material.dispose(); }
   const built = buildCarMeshes(player.group, player.color, player.num, selectedCar);
+  scene.add(built.contact);
   player.wheels = built.wheels;
   player.glow = built.glow;
   player.nitroGlow = built.nitroGlow;
   player.overGlow = built.overGlow;
   player.tailMat = built.tailMat;
+  player.contact = built.contact;
+  player.chassis = built.chassis;
   applyCarDims(player, selectedCar);
   player.group.position.copy(player.pos);
   player.group.rotation.set(0, player.yaw, 0);
@@ -1935,18 +2359,25 @@ function rebuildPlayerModel(){
 function rebuildBotModel(b, key){
   const kids = [...b.group.children];
   for (const k of kids) b.group.remove(k);
+  if (b.contact){ scene.remove(b.contact); b.contact.geometry.dispose(); b.contact.material.dispose(); }
   const built = buildCarMeshes(b.group, b.color, b.num, key);
+  scene.add(built.contact);
   b.wheels = built.wheels;
   b.glow = built.glow;
   b.nitroGlow = built.nitroGlow;
   b.overGlow = built.overGlow;
   b.tailMat = built.tailMat;
+  b.contact = built.contact;
+  b.chassis = built.chassis;
+  attachFarProxy(b, key);   // 车身已重建，远景代理要跟着换
   applyCarDims(b, key);
 }
 function createRacer(color, skill, aiOffset, isPlayer, name, num, key = 'default'){
   const m = createRacerMesh(color, num, key);
   const r = {
     group: m.group, wheels: m.wheels, glow: m.glow, nitroGlow: m.nitroGlow, overGlow: m.overGlow, tailMat: m.tailMat,
+    contact: m.contact, chassis: m.chassis,
+    farProxy: null, isFar: false,
     num,
     pos: new THREE.Vector3(), vel: new THREE.Vector3(),
     yaw: 0, vf: 0,
@@ -1958,8 +2389,19 @@ function createRacer(color, skill, aiOffset, isPlayer, name, num, key = 'default
     maxSpeed: P.maxSpeed, accel: P.accel,
     finishOrder: 0, finishTime: null, name, color
   };
+  // 只为 AI 建远景代理：玩家车永远在镜头前，不需要
+  if (!isPlayer) attachFarProxy(r, key);
   applyCarDims(r, key); // 车长/车宽 → 碰撞尺寸、相机距离
   return r;
+}
+// 给 AI 车挂远景代理（重建车型时也要重新挂）
+function attachFarProxy(r, key){
+  if (r.farProxy){ r.group.remove(r.farProxy); r.farProxy = null; }
+  const proxy = buildFarProxy(CAR_TYPES[key], r.color);
+  proxy.visible = false;
+  r.group.add(proxy);
+  r.farProxy = proxy;
+  r.isFar = false;
 }
 const player = createRacer(0xff6b35, 1.0, 0, true, '玩家', '1');
 player.paint = 0xff6b35;
@@ -1977,12 +2419,14 @@ function placeRacerAt(r, i, lateral = 0){
   r.vel.set(0, 0, 0); r.vf = 0;
   r.nextCp = 0; r.cp3Done = false;
   r.s = i / N_SAMPLES; r.prevS = r.s; r.nearestI = i;
-  r.stuckT = 0; r.driftT = 0; r.boostT = 0; r.drifted = false; r.driftLoss = 0; r.slipped = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.skidPrev = null; r.rollAngle = 0; r.pitchAngle = 0;
+  r.stuckT = 0; r.driftT = 0; r.boostT = 0; r.drifted = false; r.driftLoss = 0; r.slipped = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.skidPrev = null; r.rollAngle = 0; r.pitchAngle = 0; r.suspensionOffset = 0; r.aiSteer = 0; r.aiDriftT = 0;
   syncRacer(r);
 }
 function syncRacer(r){
   r.group.position.copy(r.pos);
   r.group.rotation.set(0, r.yaw, 0);
+  // 重定位时把车壳姿态归零，避免沿用上一圈的侧倾/俯仰
+  if (r.chassis){ r.chassis.rotation.set(0, 0, 0); r.chassis.position.y = 0; }
 }
 
 /* ============ 输入 ============ */
@@ -2216,62 +2660,162 @@ function playerInput(){
   };
 }
 
-/* ============ AI 控制：沿中心线（带偏移）追踪前方点 + 弯道限速 ============ */
-function aiControl(r){
+/* ============ AI 控制 v2：赛车线前瞻 + 物理刹车距离 + 平滑转向 ============
+ * 相比 v1（单点前视 + 距离阈值硬刹），本版解决三个问题：
+ *   1. AI 在高速时"看到弯才刹"，来不及 → 改为物理反解刹车距离 v² = v_t² + 2·a·d
+ *   2. AI 全程贴固定车道，过弯路线绕远 → 加入弯心内切（外-内-外简化版）
+ *   3. AI 每分钟反复满舵修正，画面上抽方向盘 → 转向指令加变化率限制
+ */
+function aiControl(r, dt){
   const speed = Math.abs(r.vf);
   const M = r.maxSpeed;
   const dsPer = trackLenValue / N_SAMPLES;
+  const N = N_SAMPLES;
+  const step = dt > 0 ? dt : 1 / 60;
+  // 难度弯道系数：DIFFS.corner 越大越保守（easy 1.5 → 入弯速度更低、刹车更早）
+  const cornerMul = (DIFFS[diffKey] && DIFFS[diffKey].corner) || 1;
 
-  // 前视（距离制 + 上限，发夹弯里不会望到对面）
-  const lookM = clamp(8 + speed * 0.5, 8, 22);
+  // ── 1. 前瞻距离：随速度线性增长（10m → 40m），保证高速有足够反应量
+  const lookM = clamp(10 + speed * 0.75, 10, 40);
   const look = Math.max(3, Math.round(lookM / dsPer));
-  const ti = (r.nearestI + look) % N_SAMPLES;
+
+  // ── 2. 赛车线：基础车道 + 弯心内切
+  //    内切量按曲率加权累计（越近的弯权重越大），收束到 ±1.4m，约半个车身
+  let lineBias = 0;
+  for (let k = 0; k < look; k += 2){
+    const i = (r.nearestI + k) % N;
+    const w = 1 - k / look;
+    lineBias += trackCurvSign[i] * Math.min(1, trackCurv[i] * 60) * w;
+  }
+  lineBias = clamp(lineBias * 0.45, -1, 1) * 1.4;
+
+  // ── 2.5 避让：正前方 14m 内有车时主动横向让开
+  //    之前 AI 只会一头顶上去靠 collideRacers 硬推，视觉上像"撞车不躲"
+  let avoid = 0;
+  for (const o of racers){
+    if (o === r) continue;
+    const dx = o.pos.x - r.pos.x, dz = o.pos.z - r.pos.z;
+    const fwd  =  dx * Math.sin(r.yaw) + dz * Math.cos(r.yaw);   // 沿车身向前的距离
+    if (fwd < 0.5 || fwd > 14) continue;
+    const side =  dx * Math.cos(r.yaw) - dz * Math.sin(r.yaw);   // 横向距离（+ 为左侧）
+    if (Math.abs(side) > 2.2) continue;
+    // 往对方相反的一侧让，越近让得越多（最多 2m）
+    avoid -= Math.sign(side || 1) * (1 - fwd / 14) * 2.0;
+  }
+
+  // 限制总横移：接近护栏时不允许继续外扩，避免压线
+  const lateral = clamp(r.aiOffset + lineBias + avoid, -(hw * 0.55), hw * 0.55);
+
+  // ── 3. 目标点（前瞻点 + 横向偏移，沿切线法线投影）
+  const ti = (r.nearestI + look) % N;
   const t = T[ti];
-  const tx = S[ti].x + t.z * r.aiOffset;
-  const tz = S[ti].z - t.x * r.aiOffset;
+  const tx = S[ti].x + t.z * lateral;
+  const tz = S[ti].z - t.x * lateral;
   const desired = Math.atan2(tx - r.pos.x, tz - r.pos.z);
-  const steer = clamp(wrapAngle(desired - r.yaw) * P.aiSteerGain, -1, 1);
 
-  // 前方 30m 内最小转弯半径
-  let kMax = 0;
-  const span = Math.max(4, Math.round(30 / dsPer));
-  for (let k = 0; k < span; k++){
-    const i = (r.nearestI + k) % N_SAMPLES;
-    if (trackCurv[i] > kMax) kMax = trackCurv[i];
-  }
-  const R = kMax > 1e-4 ? 1 / kMax : 9999;
+  // ── 4. 转向平滑：限制每秒变化率，消除 AI 抽方向盘
+  const err = wrapAngle(desired - r.yaw);
+  const steerTarget = clamp(err * P.aiSteerGain, -1, 1);
+  const prevSteer = r.aiSteer || 0;
+  const dSteerMax = 7 * step;                     // 每秒最多 7 个单位的转向变化
+  const steer = prevSteer + clamp(steerTarget - prevSteer, -dSteerMax, dSteerMax);
+  r.aiSteer = steer;
 
-  // 急弯入口还有多远（第一个半径 < 45m 的采样点）
-  let dCorner = Infinity;
-  for (let k = 0; k < span; k++){
-    const i = (r.nearestI + k) % N_SAMPLES;
-    if (trackCurv[i] > 1 / 45){ dCorner = k * dsPer; break; }
-  }
-
-  const safeV = (k) => {
-    const rk = (R === 9999 ? 1e5 : R) * k;
-    return Math.min(M, rk / (1 + rk * P.steerFade / M));
+  // ── 5. 真实过弯极限：与 stepRacer 的偏航惯性/阻尼模型保持一致
+  //    stepRacer 里 yawSpeed 的稳态值 ≈ steerRate × 高速衰减 × k/(k+d)，
+  //    其中 k = yawInertia(3/s)，d = yawDamp(4/s × 高速加重) —— 忽略这一段会严重高估过弯能力
+  const yawCapAt = (v) => {
+    const fade = 1 - P.steerFade * Math.min(1, v / P.PEAK_SPEED);
+    const d = 4 * (1 + 0.02 * Math.max(0, v - 30));   // 与 physics 的 highSpeedDamp 同式
+    return P.steerRate * fade * (3 / (3 + d));
   };
-  const vGrip  = safeV(P.steerRate) * r.skill;
-  const vDrift = safeV(P.steerRate * P.driftSteerBoost) * r.skill;
-  const vEntry = Math.min(M, vDrift * 0.9);   // 带漂移允许的入弯速度
-  const inCorner = dCorner < 18;
+  // 二分反解：半径 R 的弯道最多能以多快稳定通过
+  // 余量按难度给：hard 更贴极限（0.96），easy 更保守（0.89）
+  const cornerMargin = clamp(0.96 - (cornerMul - 0.9) * 0.12, 0.86, 0.96);
+  const cornerSpeed = (R) => {
+    let lo = 3, hi = M;
+    for (let it = 0; it < 10; it++){
+      const mid = (lo + hi) * 0.5;
+      if (mid / R <= yawCapAt(mid) * cornerMargin) lo = mid; else hi = mid;
+    }
+    return lo;
+  };
 
-  let throttle = 0, brake = 0;
-  if (!inCorner){
-    // 还没进弯：先刹车把速度压到入弯速度（提前 60m 开始）
-    const target = dCorner < 60 ? vEntry : M * 0.98;
-    throttle = speed < target ? 1 : 0;
-    brake = speed > target * 1.03 ? 1 : 0;
-  } else {
-    // 已经进弯：超速继续刹，只有超过抓地极限才拉手刹
-    throttle = speed < vDrift * 0.82 ? 1 : 0;
-    brake = speed > vEntry * 1.04 ? 1 : 0;
+  // ── 6. 速度曲线：前瞻范围内逐点反解"此刻还能开多快"，取最小值
+  //    v_allow(d) = √(v_safe² + 2·a·d)：距离越远，允许的当前速度越高
+  //    掉头/发夹弯（R<35m）按漂移速度计算：driftSteerBoost=1.4 带来约 18% 的过弯速度提升
+  //    注意：这里不乘 1/cornerMul —— 难度折扣会把漂移带来的速度增益抵消掉（曾经的 bug）
+  const HAIRPIN_K = 1 / 35;
+  const DRIFT_SPEED_MUL = 1.18;
+  const brakeA = P.brake * 0.85;
+  // 前瞻距离随速度伸缩：满速（300km/h）时刹车距离约 93m，固定 90m 前瞻会来不及减速
+  // 按 v²/2a 计算所需距离，再留 30m 余量，上限 150m（避免采样过多）
+  const brakeDist = (speed * speed - 100) / (2 * brakeA) + 30;
+  const lookDist = Math.min(150, Math.max(70, brakeDist));
+  const span = Math.max(10, Math.round(lookDist / dsPer));
+  let vAllow = M * 0.99, kMax = 0, dCorner = Infinity;
+  for (let k = 0; k < span; k += 2){
+    const i = (r.nearestI + k) % N;
+    const cv = trackCurv[i];
+    if (cv > kMax) kMax = cv;
+    if (dCorner === Infinity && cv > 1 / 60) dCorner = k * dsPer;
+    const Rk = cv > 1e-5 ? 1 / cv : 1e5;
+    let vs = cornerSpeed(Rk) * r.skill / cornerMul;                       // 技能 & 难度修正
+    if (cv > HAIRPIN_K) vs = cornerSpeed(Rk) * r.skill * DRIFT_SPEED_MUL; // 掉头弯：刻意带速进弯
+    const vHere = Math.sqrt(vs * vs + 2 * brakeA * k * dsPer);
+    if (vHere < vAllow) vAllow = vHere;
   }
+  // ── 7. 出弯预判：前方 25m 的曲率明显小于当前位置 → 弯快结束，提前给油
+  //    没有这一段 AI 会一直收油到弯道出口，出弯加速白白慢半拍
+  const curvNow = trackCurv[r.nearestI] || 0;
+  let curvSoon = 0;
+  for (let k = 4; k < Math.round(25 / dsPer); k += 2){
+    const cv = trackCurv[(r.nearestI + k) % N];
+    if (cv > curvSoon) curvSoon = cv;
+  }
+  const exitOpen = curvSoon < Math.max(1 / 200, curvNow * 0.75);
 
+  const target = Math.min(M * 0.99, vAllow) * (exitOpen ? 1.06 : 1);   // 出弯可以略微超一点目标
+
+  // ── 8. 油门/刹车：接近目标速度时留死区，避免每帧反复切换造成"点刹"
+  let throttle = 0, brake = 0;
+  if (speed < target - 0.6) throttle = 1;
+  else if (speed > target + 1.2) brake = Math.min(1, (speed - target) / 6);
+
+  // ── 9. 漂移（掉头弯专用）：AI 也要会拉手刹
+  //    为什么值得漂：driftSteerBoost=1.4 让偏航速率提升 40%，同样半径能多带约 18% 速度；
+  //    而且完美漂移（≥0.8s 且真侧滑）松手后会补回速度并触发加速，对 AI 同样生效。
+  //    为什么不能乱漂：拉手刹时 driftAccelMul=0（加速度归零）+ 侧向摩擦掉速，缓弯漂移纯亏。
   const vl = r.vel.x * Math.cos(r.yaw) - r.vel.z * Math.sin(r.yaw);
-  const spinning = Math.abs(vl) > 20;
-  const hand = inCorner && !spinning && speed > vGrip * 0.98 && speed > 8;
+  const curvHere = trackCurv[r.nearestI] || 0;
+  const RHere = curvHere > 1e-5 ? 1 / curvHere : 1e5;
+  const inHairpin = RHere < 55;                 // 当前所处弯道的半径（不是前瞻最急）
+  // 该弯的"物理抓地极限"（不含技能/难度折扣）：漂移判定要看物理能力，而不是 AI 的自我设限
+  const vGripHere = cornerSpeed(RHere);
+  // 相对中心线的横向位置（+ 为左）：漂移会向外滑，靠这个量避免直接滑进护栏
+  const latNx = T[r.nearestI].z, latNz = -T[r.nearestI].x;
+  const latPos = (r.pos.x - S[r.nearestI].x) * latNx + (r.pos.z - S[r.nearestI].z) * latNz;
+  const latLimit = hw * 0.52;
+  r.aiDriftT = r.aiDriftT || 0;
+
+  let hand = false;
+  if (r.aiDriftT > 0){
+    // 已在漂移：转到车头基本对准出弯方向、或超时/失速/甩过头/贴近护栏就松手刹
+    r.aiDriftT += step;
+    const aligned = Math.abs(err) < 0.28 && r.aiDriftT > 0.55;  // 最少漂 0.55s，否则不成形也不触发完美判定
+    const overRot = Math.abs(vl) > 26;        // 甩得太横，继续漂会打转
+    const timeout = r.aiDriftT > 1.6;
+    const tooSlow = speed < 14;
+    const tooWide = Math.abs(latPos) > latLimit;
+    if (aligned || overRot || timeout || tooSlow || tooWide) r.aiDriftT = 0;
+    else hand = true;
+  } else if (inHairpin && speed > 16 && Math.abs(steer) > 0.35
+             && speed > vGripHere * 0.90          // 已到/超出该弯的抓地极限 → 单靠转向过不去
+             && Math.abs(latPos) < latLimit * 0.85){
+    // 进入掉头弯、已贴近物理极限、且还有横向余量 → 主动漂移
+    hand = true;
+    r.aiDriftT = 0.0001;
+  }
 
   return { steer, throttle, brake, hand };
 }
@@ -2377,6 +2921,8 @@ function resetCarToTrack(){
 function restart(){            // 完全重开：按模式发车 + 清计时
   resetAllInputs();            // 键盘 + 触控输入全部清零，上一局的按键不许带进新一局
   clearSkid();
+  clearSmoke();
+  clearFlame();
   placeRacerAt(player, trackOpen ? 3 : 0, 2.5);
   player.topSpeed = 0;
   // 玩家赛车等级：同时切换对应等级的车身造型
@@ -2399,10 +2945,11 @@ function restart(){            // 完全重开：按模式发车 + 清计时
       b.maxSpeed = Math.min(ct.maxSpeed, player.maxSpeed * (d.spd || 1));
       b.accel = Math.min(ct.accel, player.accel * (d.spd || 1));
       b.group.visible = true;
+      if (b.contact) b.contact.visible = true;
       placeRacerAt(b, (N_SAMPLES - 14 * (i + 1)) % N_SAMPLES, i % 2 === 0 ? -2.5 : 2.5);
     });
   } else {
-    bots.forEach(b => { b.group.visible = false; });
+    bots.forEach(b => { b.group.visible = false; if (b.contact) b.contact.visible = false; });
   }
   raceTime = 0; lapCount = 0; finishCount = 0;
   speedFxEl.style.opacity = 0; _fxO = 0;   // 清掉上一局残留的暗角
@@ -2417,7 +2964,7 @@ function restart(){            // 完全重开：按模式发车 + 清计时
   );
   camSnap = true;
   for (const r of racers){
-    r.lap = 0; r.lapStartTime = 0; r.lastLap = null; r.finishOrder = 0; r.finishTime = null; r.nitro = 100; r.nitroOn = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.driftLoss = 0; r.rollAngle = 0; r.pitchAngle = 0;
+    r.lap = 0; r.lapStartTime = 0; r.lastLap = null; r.finishOrder = 0; r.finishTime = null; r.nitro = 100; r.nitroOn = false; r.overT = 0; r.overCd = 0; r.overUses = 0; r.yawSpeed = 0; r.driftLoss = 0; r.rollAngle = 0; r.pitchAngle = 0; r.suspensionOffset = 0; r.aiSteer = 0; r.aiDriftT = 0;
     r.splitT = new Array(CP_FRACS.length).fill(null);
     r.splitBest = new Array(CP_FRACS.length).fill(null);
   }
@@ -2458,7 +3005,11 @@ function syncTrackUI(){
 
 function startRace(sel){
   if (sel === 'practice') mode = 'practice';
-  else { mode = 'race'; diffKey = sel; }
+  else {
+    mode = 'race';
+    if (!DIFFS[sel]) sel = diffKey;   // 参数兜底：无效难度沿用当前选择，避免 DIFFS[sel] 未定义直接崩
+    diffKey = sel;
+  }
   if (mode === 'race' && trackOpen) switchTrack('loop'); // 竞技需要闭环计圈：直线图（无圈）强制回环道，其余赛道按所选进行
   restart(); // 内部会设 state='running' 并隐藏菜单
 }
@@ -2557,8 +3108,24 @@ function showPanel(name){
 }
 
 /* ============ 更新公告 ============ */
-const UPDATE_VERSION = '20261029';
+const UPDATE_VERSION = '20261030';
 const UPDATE_LOG = [
+  { ver: '2026-10-30', items: [
+    '【手感】车身与车轮解耦：过弯时车壳侧倾、四轮始终贴地，不再是“移动的铁盒子”',
+    '【手感】修正姿态轴串位：航向 / 俯仰 / 侧倾各走各的轴，转弯时不再出现莫名扭动',
+    '【手感】追尾机位拉近压低（15.5m → 12m）；过弯侧倾普通弯约 5°、漂移约 12°',
+    '【护栏】重建为连续实体墙 + 红色顶带 + 立柱，跑起来不再是一排间隔一米的白色薄片',
+    '【护栏】碰撞改按车身外缘判定，车身不会再有半个身位插进墙里',
+    '【AI】学会漂移过掉头弯：弯中拉手刹，出弯对准方向即松手吃完美漂移补偿',
+    '【AI】刹车预判随速度动态拉长前瞻（最远 150m），300km/h 也来得及减速入弯',
+    '【AI】新增前车避让，不再顶着别人硬推；出弯提前给油',
+    '【建模】车身轮廓改为样条重采样，从折纸盒变流线型；方正车型（MINI）保留棱角',
+    '【建模】远山重做，不再是一排一模一样的金字塔；修复 MINI 车轮完全藏在车身内的问题',
+    '【特效】新增尾焰粒子：氮气青蓝、极限紫白、完美漂移橙金，喷口拖出真实尾焰',
+    '【特效】完美漂移瞬间橙金粒子爆发，补偿到手有明确反馈',
+    '【画质】天空改程序化渐变 + 太阳光晕；车漆升级金属漆 + 清漆双层；草地改用噪声贴图',
+    '【修复】速度线不再横穿天空像白色划痕',
+  ]},
   { ver: '2026-10-29', items: [
     '修复输入残留：窗口失焦 / 切后台 / 暂停 / 重开 / 回菜单时自动清空键盘与触控输入，杜绝松手后车还在跑',
     '手机切后台自动暂停并清输入，恢复后不带残影',
@@ -2869,6 +3436,19 @@ function stepRacer(r, input, dt){
       // 补偿：把漂移期间损失的速度补回来，但不超过进入漂移时的速度
       const recover = Math.min(r.driftLoss * 0.9, r.driftEntrySpeed - speed);
       vf = Math.min(vf + recover, r.driftEntrySpeed * P.boostGain);
+      // 完美漂移瞬间的爆发：一次性喷出一簇橙金粒子，让"补偿到手"有明确反馈
+      {
+        const ct = CAR_TYPES[r.carType] || CAR_TYPES.default;
+        const ex = ct.exhaust || [0.3, ct.len / 2 * -0.92];
+        const cy = Math.cos(r.yaw), sy = Math.sin(r.yaw);
+        const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw);
+        for (let k = 0; k < 18; k++){
+          const px = (Math.random() - 0.5) * 0.9;
+          const lz = ex[1] - 0.15;
+          emitFlame(r.pos.x + px * cy + lz * sy, ex[0] + (Math.random() - 0.5) * 0.25,
+                    r.pos.z - px * sy + lz * cy, fx, fz, 1.0, 0.72, 0.25, 1.6);
+        }
+      }
       if (r.isPlayer) flash('完美漂移！补偿 ' + Math.round(recover * 3.6) + ' km/h', 1200);
     }
     r.drifted = false;
@@ -2920,9 +3500,11 @@ function stepRacer(r, input, dt){
     vf += r.accel * (r.boostT > 0 ? P.boostGain : 1) * nitroAcc * driftAccelMul * dt * taper * lowMul;
   }
   vf = Math.min(vf, cap);
-  if (input.brake){
-    if (vf > 0.5) vf -= P.brake * dt;
-    else vf = Math.max(vf - P.reverseAccel * dt, -P.maxReverse);
+  // 刹车力度可分级（AI 渐进刹车用 0~1，玩家按键恒为 1）
+  const brakeAmt = Math.min(1, Math.abs(input.brake) || 0);
+  if (brakeAmt > 0.01){
+    if (vf > 0.5) vf -= P.brake * brakeAmt * dt;
+    else vf = Math.max(vf - P.reverseAccel * brakeAmt * dt, -P.maxReverse);
   }
   vf -= vf * P.drag * dt;
   vf -= Math.sign(vf) * Math.min(Math.abs(vf), P.rolling * dt);
@@ -2943,6 +3525,8 @@ function stepRacer(r, input, dt){
   r.vel.set(fx * vf + lx * vl, 0, fz * vf + lz * vl);
   r.pos.addScaledVector(r.vel, dt);
   // 护栏碰撞：两侧都检测，超出即推回并反弹
+  // 关键：判定用的是"车身外缘"而不是"车心"。旧代码只比较车心到墙线的距离，
+  //      车心能一直压到墙上，车身（半宽约 0.9m）整块插进墙里——跑起来像穿墙。
   if (window.__barrierDist) {
     const bi = Math.max(0, Math.min(N_SAMPLES - 1, r.nearestI));
     const p = S[bi], t = T[bi];
@@ -2953,9 +3537,11 @@ function stepRacer(r, input, dt){
     const barRz = p.z - nz * window.__barrierDist;
     const dLx = r.pos.x - barLx, dLz = r.pos.z - barLz;
     const dRx = r.pos.x - barRx, dRz = r.pos.z - barRz;
-    // 检查左护栏（法线指向外侧）和右护栏（-法线指向外侧）
-    const penL = dLx * nx + dLz * nz;
-    const penR = dRx * (-nx) + dRz * (-nz);
+    // 车身半宽：colR = width*0.6，约等于半宽的 1.2 倍，取 0.85 折算成实际半宽
+    const carHalf = (r.colR || 1.1) * 0.85;
+    // 车心最多推进到"墙线 - 车身半宽"
+    const penL = dLx * nx + dLz * nz + carHalf;
+    const penR = dRx * (-nx) + dRz * (-nz) + carHalf;
     if (penL > 0 || penR > 0) {
       const pen = Math.max(penL, penR);
       const bnx = penL >= penR ? nx : -nx;
@@ -2994,6 +3580,10 @@ function stepRacer(r, input, dt){
       } else {
         r.skidPrev[i] = [wx, wz];
       }
+      // 轮胎烟：每个后轮按概率喷 1 粒，侧滑越大喷得越勤
+      if (Math.random() < Math.min(0.9, Math.abs(vl) / 8)){
+        emitSmoke(wx, 0.16, wz, r.vel.x, r.vel.z);
+      }
     }
   } else if (r.skidPrev){
     r.skidPrev = null;
@@ -3002,17 +3592,56 @@ function stepRacer(r, input, dt){
   // 视觉：车身姿态（侧倾+俯仰）+ 前轮转向
   r.group.position.copy(r.pos);
   r.group.rotation.y = r.yaw;
+  // 接触阴影：只跟位置和航向，不吃侧倾/俯仰（否则阴影会插进路面）
+  if (r.contact){
+    r.contact.position.x = r.pos.x;
+    r.contact.position.z = r.pos.z;
+    r.contact.rotation.y = r.yaw;
+    r.contact.visible = !r.isFar;
+  }
   // 侧倾：基于 yawSpeed，漂移时更大，低速时衰减
+  // 方向说明：rotation.z > 0 会把车身左侧抬起来（向右倾）。
+  // 左转（yawSpeed > 0）时离心力把车身压向右侧，所以直接用正值就是正确的"外倾"。
   const rollTarget = r.yawSpeed * P.roll * 0.3 * steerSmooth;
-  const driftRollMul = isDrift ? 2.5 : 1.0;
+  const driftRollMul = isDrift ? 1.9 : 1.0;
   r.rollAngle = (r.rollAngle || 0);
-  r.rollAngle += (rollTarget * driftRollMul - r.rollAngle) * Math.min(1, 6 * dt);  // 更快的侧倾响应
-  r.group.rotation.z = r.rollAngle;
+  r.rollAngle += (rollTarget * driftRollMul - r.rollAngle) * Math.min(1, 6 * dt);
+  r.rollAngle = clamp(r.rollAngle, -0.22, 0.22);   // 封顶 12.6°：再大就成了翻车
   // 俯仰：加速后仰，刹车前倾
-  const pitchTarget = (input.throttle ? -0.03 : 0) + (input.brake ? 0.05 : 0);
+  const pitchTarget = (input.throttle ? -0.045 : 0) + (input.brake ? 0.075 : 0);
   r.pitchAngle = (r.pitchAngle || 0);
-  r.pitchAngle += (pitchTarget - r.pitchAngle) * Math.min(1, 5 * dt);  // 更快的俯仰响应
-  r.group.rotation.x = r.pitchAngle;
+  r.pitchAngle += (pitchTarget - r.pitchAngle) * Math.min(1, 5 * dt);
+  // 悬挂：车身随速度上下浮动（模拟路面起伏与悬挂压缩）
+  const suspensionFreq = 0.01 + speed * 0.0008;
+  const suspensionAmp = Math.min(0.05, speed * 0.0016) * (isDrift ? 1.5 : 1.0);
+  r.suspensionOffset = (r.suspensionOffset || 0);
+  r.suspensionOffset += (Math.sin(Date.now() * suspensionFreq) * suspensionAmp - r.suspensionOffset) * Math.min(1, 8 * dt);
+
+  // 姿态只作用于 chassis（车壳），轮子留在 group 里不受影响：
+  // 之前 group 同时承载 yaw/roll/pitch，且轮子是它的子对象，导致整车连轮子一起歪，
+  // 加上欧拉角默认 XYZ 顺序，车头一转，侧倾就会串到俯仰轴上 —— 这就是"移动铁盒子"的来源。
+  if (r.chassis){
+    r.chassis.rotation.z = r.rollAngle;
+    r.chassis.rotation.x = r.pitchAngle;
+    // 侧倾时车壳外缘会往下扎，按倾角抬一点，避免压进路面（等效于抬高侧倾中心）
+    r.chassis.position.y = r.suspensionOffset + Math.abs(r.rollAngle) * 0.5;
+  }
+  // 车身整体高度保持贴地，浮动交给 chassis
+  r.group.position.y = r.pos.y || 0;
+  // 远景代理切换：AI 车距镜头超过 90m 隐藏整套细节，只留 5 个面的代理
+  // 双阈值（90 进 / 78 出）避免在临界距离反复切换闪烁
+  if (r.farProxy){
+    const d = camera.position.distanceTo(r.pos);
+    if (!r.isFar && d > FAR_DIST){
+      r.isFar = true;
+      r.farProxy.visible = true;
+      for (const c of r.group.children) if (c !== r.farProxy) c.visible = false;
+    } else if (r.isFar && d < NEAR_DIST){
+      r.isFar = false;
+      r.farProxy.visible = false;
+      for (const c of r.group.children) c.visible = true;
+    }
+  }
   // 前轮转向：速度越高角度越小（参考跑跑卡丁车/QQ飞车机制）
   const steerAngle = input.steer * 0.5 * Math.max(0.3, 1 - speed / P.PEAK_SPEED);
   const spin = (vf / 0.35) * dt;
@@ -3020,20 +3649,40 @@ function stepRacer(r, input, dt){
     w.rotation.x += spin;
     if (i < 2) w.rotation.y = steerAngle;
   });
-  // 奖励火焰
+  // 奖励火焰 / 氮气 / 极限喷射：远景代理模式下不显示（否则会盖在代理上）
   if (r.glow){
-    r.glow.visible = r.boostT > 0;
-    if (r.glow.visible) r.glow.scale.setScalar(0.8 + Math.random() * 0.5);
+    r.glow.visible = r.boostT > 0 && !r.isFar;
+    if (r.glow.visible) r.glow.scale.setScalar(0.85 + Math.random() * 0.4);
   }
-  // 氮气喷射
   if (r.nitroGlow){
-    r.nitroGlow.visible = !!r.nitroOn;
-    if (r.nitroGlow.visible) r.nitroGlow.scale.set(1, 1, 0.85 + Math.random() * 0.4);
+    r.nitroGlow.visible = !!r.nitroOn && !r.isFar;
+    if (r.nitroGlow.visible) r.nitroGlow.scale.set(1, 1, 0.9 + Math.random() * 0.35);
   }
-  // 极限突破喷射
   if (r.overGlow){
-    r.overGlow.visible = r.overT > 0;
-    if (r.overGlow.visible) r.overGlow.scale.set(1, 1, 0.9 + Math.random() * 0.5);
+    r.overGlow.visible = r.overT > 0 && !r.isFar;
+    if (r.overGlow.visible) r.overGlow.scale.set(1, 1, 0.95 + Math.random() * 0.45);
+  }
+  // 尾焰粒子：三种喷射状态共用同一粒子池，靠颜色区分
+  //   完美漂移 = 橙金，氮气 = 青蓝，极限突破 = 紫白（最亮最长）
+  if (!r.isFar && (r.boostT > 0 || r.nitroOn || r.overT > 0)){
+    const ct = CAR_TYPES[r.carType] || CAR_TYPES.default;
+    const ex = ct.exhaust || [0.3, ct.len / 2 * -0.92];
+    const cy = Math.cos(r.yaw), sy = Math.sin(r.yaw);
+    const fx = Math.sin(r.yaw), fz = Math.cos(r.yaw);
+    const over = r.overT > 0, nit = r.nitroOn;
+    const cr = over ? 0.80 : (nit ? 0.40 : 1.00);
+    const cg = over ? 0.62 : (nit ? 0.78 : 0.62);
+    const cb = over ? 1.00 : (nit ? 1.00 : 0.18);
+    const power = over ? 1.5 : (nit ? 1.15 : 0.95);
+    const perFrame = over ? 3 : 2;
+    for (const px of [-0.21, 0.21]){
+      const lz = ex[1] - 0.2;
+      const wx = r.pos.x + px * cy + lz * sy;
+      const wz = r.pos.z - px * sy + lz * cy;
+      for (let k = 0; k < perFrame; k++){
+        emitFlame(wx, ex[0], wz, fx, fz, cr, cg, cb, power);
+      }
+    }
   }
 
   // 圈速进度（弧长比例 s ∈ [0,1)）
@@ -3437,7 +4086,7 @@ function initGarage(){
     scene.add(floor);
 
     const platform = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.9, 0.5, 48),
-      new THREE.MeshPhongMaterial({ color: 0x232a33, shininess: 60 }));
+      new THREE.MeshStandardMaterial({ color: 0x232a33, metalness: 0.2, roughness: 0.7 }));
     platform.position.set(GARAGE_POS.x, 0.25, GARAGE_POS.z);
     platform.receiveShadow = true;
     scene.add(platform);
@@ -3498,8 +4147,14 @@ function initGarage(){
 const streakGroup = new THREE.Group();
 const streakMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
 function respawnStreak(m, anywhere){
-  const a = Math.random() * Math.PI * 2, r = 2.8 + Math.random() * 5.7;
-  m.position.set(Math.cos(a) * r, Math.sin(a) * r + 1.2, anywhere ? Math.random() * 36 - 18 : -18);
+  // 只在视野前方 10~34m 的环形带里生成，且限制在水平带内。
+  // 原本 z 从 -18 到 +18 全随机，靠近相机的那些会被透视放大成横贯画面的白色划痕。
+  const a = Math.random() * Math.PI * 2, r = 4.5 + Math.random() * 4.5;
+  m.position.set(
+    Math.cos(a) * r,
+    Math.sin(a) * 0.9 + 0.1,
+    anywhere ? (-10 - Math.random() * 24) : -30
+  );
 }
 {
   const streakGeo = new THREE.BoxGeometry(0.03, 0.03, 1);
@@ -3512,17 +4167,17 @@ function respawnStreak(m, anywhere){
 scene.add(streakGroup);
 function updateStreaks(dt){
   const vis = clamp((Math.abs(player.vf) - 14) / 26, 0, 1); // 50km/h 以下不出现
-  streakMat.opacity = vis * 0.45;
+  streakMat.opacity = vis * 0.32;
   streakGroup.visible = vis > 0.02;
   if (!streakGroup.visible) return;
   streakGroup.position.copy(camera.position);
   streakGroup.quaternion.copy(camera.quaternion);
   const adv = Math.abs(player.vf) * dt * 2.6;   // 粒子向车尾流动（流速略超车速，制造掠过感）
-  const len = 1 + Math.abs(player.vf) * 0.16;   // 越快拖得越长
+  const len = 1 + Math.abs(player.vf) * 0.12;   // 越快拖得越长
   for (const m of streakGroup.children){
     m.position.z += adv;
     m.scale.z = len;
-    if (m.position.z > 18) respawnStreak(m, false);
+    if (m.position.z > -7) respawnStreak(m, false);   // 掠过相机前 7m 就回收，杜绝贴脸放大的长条
   }
 }
 
@@ -3801,7 +4456,7 @@ function loop(){
       if (isTouch) updateDriftDebounce(_driftRaw.pressed, dt);
       stepRacer(player, playerInput(), dt);
       if (mode === 'race'){
-        for (const b of bots) stepRacer(b, aiControl(b), dt);
+        for (const b of bots) stepRacer(b, aiControl(b, dt), dt);
       } else if (!trackOpen){
         // 练习模式：录制本圈轨迹（0.1s 一帧，作幽灵数据）；超出上限停止录制防无限膨胀
         recTimer += dt;
@@ -3816,6 +4471,8 @@ function loop(){
         }
       }
       collideRacers();
+      updateSmoke(dt);
+      updateFlame(dt);
       if (mode === 'race') updateStandings();
       updateGhost();
       updateCamera(dt);
@@ -3868,7 +4525,7 @@ function loop(){
 }
 // 初始化：只摆车做菜单背景，绝不自动开跑（restart 会把 state 设为 running）
 placeRacerAt(player, 0, 2.5);
-bots.forEach(b => { b.group.visible = false; });
+bots.forEach(b => { b.group.visible = false; if (b.contact) b.contact.visible = false; });
 if (settings.track && settings.track !== currentTrack) switchTrack(settings.track);
 buildMinimap();          // 未切赛道时 switchTrack 不会触发，这里补一次
 loadTrackRecords();
